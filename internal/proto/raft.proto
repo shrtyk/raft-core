@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package raft.v1;
 
-option go_package = "github.com/shrtyk/raft-core/internal/proto/gen;raft";
+option go_package = "github.com/shrtyk/raft-core/internal/proto/gen;raftpb";
 
 service RaftService {
   rpc InstallSnapshot(InstallSnapshotRequest) returns (InstallSnapshotResponse);
@@ -19,6 +19,8 @@ message RaftPersistentState {
   int64 CurrentTerm = 1;
   int64 VotedFor = 2;
   repeated LogEntry Log = 3;
+  int64 LastIncludedIndex = 4;
+  int64 LastIncludedTerm = 5;
 }
 
 message InstallSnapshotRequest {
@@ -34,7 +36,7 @@ message InstallSnapshotResponse { int64 Term = 1; }
 message RequestVoteRequest {
   int64 Term = 1;
   int64 CandidateId = 2;
-  int64 LastLogIdx = 3;
+  int64 LastLogIndex = 3;
   int64 LastLogTerm = 4;
 }
 
@@ -48,14 +50,14 @@ message AppendEntriesRequest {
   int64 Term = 1;
   int64 LeaderId = 2;
   int64 PrevLogTerm = 3;
-  int64 PrevLogIdx = 4;
-  int64 LeaderCommitIdx = 5;
+  int64 PrevLogIndex = 4;
+  int64 LeaderCommitIndex = 5;
   repeated LogEntry Entries = 6;
 }
 
 message AppendEntriesResponse {
   int64 Term = 1;
   bool Success = 2;
-  int64 ConflictIdx = 3;
+  int64 ConflictIndex = 3;
   int64 ConflictTerm = 4;
 }

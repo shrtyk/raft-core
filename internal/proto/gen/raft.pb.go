@@ -4,7 +4,7 @@
 // 	protoc        v6.32.1
 // source: raft.proto
 
-package raft
+package raftpb
 
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -74,12 +74,14 @@ func (x *LogEntry) GetCmd() [][]byte {
 }
 
 type RaftPersistentState struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	CurrentTerm   int64                  `protobuf:"varint,1,opt,name=CurrentTerm,proto3" json:"CurrentTerm,omitempty"`
-	VotedFor      int64                  `protobuf:"varint,2,opt,name=VotedFor,proto3" json:"VotedFor,omitempty"`
-	Log           []*LogEntry            `protobuf:"bytes,3,rep,name=Log,proto3" json:"Log,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	CurrentTerm       int64                  `protobuf:"varint,1,opt,name=CurrentTerm,proto3" json:"CurrentTerm,omitempty"`
+	VotedFor          int64                  `protobuf:"varint,2,opt,name=VotedFor,proto3" json:"VotedFor,omitempty"`
+	Log               []*LogEntry            `protobuf:"bytes,3,rep,name=Log,proto3" json:"Log,omitempty"`
+	LastIncludedIndex int64                  `protobuf:"varint,4,opt,name=LastIncludedIndex,proto3" json:"LastIncludedIndex,omitempty"`
+	LastIncludedTerm  int64                  `protobuf:"varint,5,opt,name=LastIncludedTerm,proto3" json:"LastIncludedTerm,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *RaftPersistentState) Reset() {
@@ -131,6 +133,20 @@ func (x *RaftPersistentState) GetLog() []*LogEntry {
 		return x.Log
 	}
 	return nil
+}
+
+func (x *RaftPersistentState) GetLastIncludedIndex() int64 {
+	if x != nil {
+		return x.LastIncludedIndex
+	}
+	return 0
+}
+
+func (x *RaftPersistentState) GetLastIncludedTerm() int64 {
+	if x != nil {
+		return x.LastIncludedTerm
+	}
+	return 0
 }
 
 type InstallSnapshotRequest struct {
@@ -257,7 +273,7 @@ type RequestVoteRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Term          int64                  `protobuf:"varint,1,opt,name=Term,proto3" json:"Term,omitempty"`
 	CandidateId   int64                  `protobuf:"varint,2,opt,name=CandidateId,proto3" json:"CandidateId,omitempty"`
-	LastLogIdx    int64                  `protobuf:"varint,3,opt,name=LastLogIdx,proto3" json:"LastLogIdx,omitempty"`
+	LastLogIndex  int64                  `protobuf:"varint,3,opt,name=LastLogIndex,proto3" json:"LastLogIndex,omitempty"`
 	LastLogTerm   int64                  `protobuf:"varint,4,opt,name=LastLogTerm,proto3" json:"LastLogTerm,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -307,9 +323,9 @@ func (x *RequestVoteRequest) GetCandidateId() int64 {
 	return 0
 }
 
-func (x *RequestVoteRequest) GetLastLogIdx() int64 {
+func (x *RequestVoteRequest) GetLastLogIndex() int64 {
 	if x != nil {
-		return x.LastLogIdx
+		return x.LastLogIndex
 	}
 	return 0
 }
@@ -382,15 +398,15 @@ func (x *RequestVoteResponse) GetVoteGranted() bool {
 }
 
 type AppendEntriesRequest struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	Term            int64                  `protobuf:"varint,1,opt,name=Term,proto3" json:"Term,omitempty"`
-	LeaderId        int64                  `protobuf:"varint,2,opt,name=LeaderId,proto3" json:"LeaderId,omitempty"`
-	PrevLogTerm     int64                  `protobuf:"varint,3,opt,name=PrevLogTerm,proto3" json:"PrevLogTerm,omitempty"`
-	PrevLogIdx      int64                  `protobuf:"varint,4,opt,name=PrevLogIdx,proto3" json:"PrevLogIdx,omitempty"`
-	LeaderCommitIdx int64                  `protobuf:"varint,5,opt,name=LeaderCommitIdx,proto3" json:"LeaderCommitIdx,omitempty"`
-	Entries         []*LogEntry            `protobuf:"bytes,6,rep,name=Entries,proto3" json:"Entries,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Term              int64                  `protobuf:"varint,1,opt,name=Term,proto3" json:"Term,omitempty"`
+	LeaderId          int64                  `protobuf:"varint,2,opt,name=LeaderId,proto3" json:"LeaderId,omitempty"`
+	PrevLogTerm       int64                  `protobuf:"varint,3,opt,name=PrevLogTerm,proto3" json:"PrevLogTerm,omitempty"`
+	PrevLogIndex      int64                  `protobuf:"varint,4,opt,name=PrevLogIndex,proto3" json:"PrevLogIndex,omitempty"`
+	LeaderCommitIndex int64                  `protobuf:"varint,5,opt,name=LeaderCommitIndex,proto3" json:"LeaderCommitIndex,omitempty"`
+	Entries           []*LogEntry            `protobuf:"bytes,6,rep,name=Entries,proto3" json:"Entries,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *AppendEntriesRequest) Reset() {
@@ -444,16 +460,16 @@ func (x *AppendEntriesRequest) GetPrevLogTerm() int64 {
 	return 0
 }
 
-func (x *AppendEntriesRequest) GetPrevLogIdx() int64 {
+func (x *AppendEntriesRequest) GetPrevLogIndex() int64 {
 	if x != nil {
-		return x.PrevLogIdx
+		return x.PrevLogIndex
 	}
 	return 0
 }
 
-func (x *AppendEntriesRequest) GetLeaderCommitIdx() int64 {
+func (x *AppendEntriesRequest) GetLeaderCommitIndex() int64 {
 	if x != nil {
-		return x.LeaderCommitIdx
+		return x.LeaderCommitIndex
 	}
 	return 0
 }
@@ -469,7 +485,7 @@ type AppendEntriesResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Term          int64                  `protobuf:"varint,1,opt,name=Term,proto3" json:"Term,omitempty"`
 	Success       bool                   `protobuf:"varint,2,opt,name=Success,proto3" json:"Success,omitempty"`
-	ConflictIdx   int64                  `protobuf:"varint,3,opt,name=ConflictIdx,proto3" json:"ConflictIdx,omitempty"`
+	ConflictIndex int64                  `protobuf:"varint,3,opt,name=ConflictIndex,proto3" json:"ConflictIndex,omitempty"`
 	ConflictTerm  int64                  `protobuf:"varint,4,opt,name=ConflictTerm,proto3" json:"ConflictTerm,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -519,9 +535,9 @@ func (x *AppendEntriesResponse) GetSuccess() bool {
 	return false
 }
 
-func (x *AppendEntriesResponse) GetConflictIdx() int64 {
+func (x *AppendEntriesResponse) GetConflictIndex() int64 {
 	if x != nil {
-		return x.ConflictIdx
+		return x.ConflictIndex
 	}
 	return 0
 }
@@ -541,11 +557,13 @@ const file_raft_proto_rawDesc = "" +
 	"raft.proto\x12\araft.v1\"0\n" +
 	"\bLogEntry\x12\x12\n" +
 	"\x04Term\x18\x01 \x01(\x03R\x04Term\x12\x10\n" +
-	"\x03Cmd\x18\x02 \x03(\fR\x03Cmd\"x\n" +
+	"\x03Cmd\x18\x02 \x03(\fR\x03Cmd\"\xd2\x01\n" +
 	"\x13RaftPersistentState\x12 \n" +
 	"\vCurrentTerm\x18\x01 \x01(\x03R\vCurrentTerm\x12\x1a\n" +
 	"\bVotedFor\x18\x02 \x01(\x03R\bVotedFor\x12#\n" +
-	"\x03Log\x18\x03 \x03(\v2\x11.raft.v1.LogEntryR\x03Log\"\xb6\x01\n" +
+	"\x03Log\x18\x03 \x03(\v2\x11.raft.v1.LogEntryR\x03Log\x12,\n" +
+	"\x11LastIncludedIndex\x18\x04 \x01(\x03R\x11LastIncludedIndex\x12*\n" +
+	"\x10LastIncludedTerm\x18\x05 \x01(\x03R\x10LastIncludedTerm\"\xb6\x01\n" +
 	"\x16InstallSnapshotRequest\x12\x12\n" +
 	"\x04Term\x18\x01 \x01(\x03R\x04Term\x12\x1a\n" +
 	"\bLeaderId\x18\x02 \x01(\x03R\bLeaderId\x12,\n" +
@@ -553,36 +571,32 @@ const file_raft_proto_rawDesc = "" +
 	"\x10LastIncludedTerm\x18\x04 \x01(\x03R\x10LastIncludedTerm\x12\x12\n" +
 	"\x04Data\x18\x05 \x03(\fR\x04Data\"-\n" +
 	"\x17InstallSnapshotResponse\x12\x12\n" +
-	"\x04Term\x18\x01 \x01(\x03R\x04Term\"\x8c\x01\n" +
+	"\x04Term\x18\x01 \x01(\x03R\x04Term\"\x90\x01\n" +
 	"\x12RequestVoteRequest\x12\x12\n" +
 	"\x04Term\x18\x01 \x01(\x03R\x04Term\x12 \n" +
-	"\vCandidateId\x18\x02 \x01(\x03R\vCandidateId\x12\x1e\n" +
-	"\n" +
-	"LastLogIdx\x18\x03 \x01(\x03R\n" +
-	"LastLogIdx\x12 \n" +
+	"\vCandidateId\x18\x02 \x01(\x03R\vCandidateId\x12\"\n" +
+	"\fLastLogIndex\x18\x03 \x01(\x03R\fLastLogIndex\x12 \n" +
 	"\vLastLogTerm\x18\x04 \x01(\x03R\vLastLogTerm\"c\n" +
 	"\x13RequestVoteResponse\x12\x12\n" +
 	"\x04Term\x18\x01 \x01(\x03R\x04Term\x12\x16\n" +
 	"\x06VterId\x18\x02 \x01(\x03R\x06VterId\x12 \n" +
-	"\vVoteGranted\x18\x03 \x01(\bR\vVoteGranted\"\xdf\x01\n" +
+	"\vVoteGranted\x18\x03 \x01(\bR\vVoteGranted\"\xe7\x01\n" +
 	"\x14AppendEntriesRequest\x12\x12\n" +
 	"\x04Term\x18\x01 \x01(\x03R\x04Term\x12\x1a\n" +
 	"\bLeaderId\x18\x02 \x01(\x03R\bLeaderId\x12 \n" +
-	"\vPrevLogTerm\x18\x03 \x01(\x03R\vPrevLogTerm\x12\x1e\n" +
-	"\n" +
-	"PrevLogIdx\x18\x04 \x01(\x03R\n" +
-	"PrevLogIdx\x12(\n" +
-	"\x0fLeaderCommitIdx\x18\x05 \x01(\x03R\x0fLeaderCommitIdx\x12+\n" +
-	"\aEntries\x18\x06 \x03(\v2\x11.raft.v1.LogEntryR\aEntries\"\x8b\x01\n" +
+	"\vPrevLogTerm\x18\x03 \x01(\x03R\vPrevLogTerm\x12\"\n" +
+	"\fPrevLogIndex\x18\x04 \x01(\x03R\fPrevLogIndex\x12,\n" +
+	"\x11LeaderCommitIndex\x18\x05 \x01(\x03R\x11LeaderCommitIndex\x12+\n" +
+	"\aEntries\x18\x06 \x03(\v2\x11.raft.v1.LogEntryR\aEntries\"\x8f\x01\n" +
 	"\x15AppendEntriesResponse\x12\x12\n" +
 	"\x04Term\x18\x01 \x01(\x03R\x04Term\x12\x18\n" +
-	"\aSuccess\x18\x02 \x01(\bR\aSuccess\x12 \n" +
-	"\vConflictIdx\x18\x03 \x01(\x03R\vConflictIdx\x12\"\n" +
+	"\aSuccess\x18\x02 \x01(\bR\aSuccess\x12$\n" +
+	"\rConflictIndex\x18\x03 \x01(\x03R\rConflictIndex\x12\"\n" +
 	"\fConflictTerm\x18\x04 \x01(\x03R\fConflictTerm2\xfd\x01\n" +
 	"\vRaftService\x12T\n" +
 	"\x0fInstallSnapshot\x12\x1f.raft.v1.InstallSnapshotRequest\x1a .raft.v1.InstallSnapshotResponse\x12H\n" +
 	"\vRequestVote\x12\x1b.raft.v1.RequestVoteRequest\x1a\x1c.raft.v1.RequestVoteResponse\x12N\n" +
-	"\rAppendEntries\x12\x1d.raft.v1.AppendEntriesRequest\x1a\x1e.raft.v1.AppendEntriesResponseB5Z3github.com/shrtyk/raft-core/internal/proto/gen;raftb\x06proto3"
+	"\rAppendEntries\x12\x1d.raft.v1.AppendEntriesRequest\x1a\x1e.raft.v1.AppendEntriesResponseB7Z5github.com/shrtyk/raft-core/internal/proto/gen;raftpbb\x06proto3"
 
 var (
 	file_raft_proto_rawDescOnce sync.Once
