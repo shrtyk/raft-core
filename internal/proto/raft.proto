@@ -1,0 +1,61 @@
+syntax = "proto3";
+
+package raft.v1;
+
+option go_package = "github.com/shrtyk/raft-core/internal/proto/gen;raft";
+
+service RaftService {
+  rpc InstallSnapshot(InstallSnapshotRequest) returns (InstallSnapshotResponse);
+  rpc RequestVote(RequestVoteRequest) returns (RequestVoteResponse);
+  rpc AppendEntries(AppendEntriesRequest) returns (AppendEntriesResponse);
+}
+
+message LogEntry {
+  int64 Term = 1;
+  repeated bytes Cmd = 2;
+}
+
+message RaftPersistentState {
+  int64 CurrentTerm = 1;
+  int64 VotedFor = 2;
+  repeated LogEntry Log = 3;
+}
+
+message InstallSnapshotRequest {
+  int64 Term = 1;
+  int64 LeaderId = 2;
+  int64 LastIncludedIndex = 3;
+  int64 LastIncludedTerm = 4;
+  repeated bytes Data = 5;
+}
+
+message InstallSnapshotResponse { int64 Term = 1; }
+
+message RequestVoteRequest {
+  int64 Term = 1;
+  int64 CandidateId = 2;
+  int64 LastLogIdx = 3;
+  int64 LastLogTerm = 4;
+}
+
+message RequestVoteResponse {
+  int64 Term = 1;
+  int64 VterId = 2;
+  bool VoteGranted = 3;
+}
+
+message AppendEntriesRequest {
+  int64 Term = 1;
+  int64 LeaderId = 2;
+  int64 PrevLogTerm = 3;
+  int64 PrevLogIdx = 4;
+  int64 LeaderCommitIdx = 5;
+  repeated LogEntry Entries = 6;
+}
+
+message AppendEntriesResponse {
+  int64 Term = 1;
+  bool Success = 2;
+  int64 ConflictIdx = 3;
+  int64 ConflictTerm = 4;
+}
