@@ -24,7 +24,7 @@ const (
 type LogEntry struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Term          int64                  `protobuf:"varint,1,opt,name=Term,proto3" json:"Term,omitempty"`
-	Cmd           [][]byte               `protobuf:"bytes,2,rep,name=Cmd,proto3" json:"Cmd,omitempty"`
+	Cmd           []byte                 `protobuf:"bytes,2,opt,name=Cmd,proto3" json:"Cmd,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -66,7 +66,7 @@ func (x *LogEntry) GetTerm() int64 {
 	return 0
 }
 
-func (x *LogEntry) GetCmd() [][]byte {
+func (x *LogEntry) GetCmd() []byte {
 	if x != nil {
 		return x.Cmd
 	}
@@ -155,7 +155,7 @@ type InstallSnapshotRequest struct {
 	LeaderId          int64                  `protobuf:"varint,2,opt,name=LeaderId,proto3" json:"LeaderId,omitempty"`
 	LastIncludedIndex int64                  `protobuf:"varint,3,opt,name=LastIncludedIndex,proto3" json:"LastIncludedIndex,omitempty"`
 	LastIncludedTerm  int64                  `protobuf:"varint,4,opt,name=LastIncludedTerm,proto3" json:"LastIncludedTerm,omitempty"`
-	Data              [][]byte               `protobuf:"bytes,5,rep,name=Data,proto3" json:"Data,omitempty"`
+	Data              []byte                 `protobuf:"bytes,5,opt,name=Data,proto3" json:"Data,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -218,7 +218,7 @@ func (x *InstallSnapshotRequest) GetLastIncludedTerm() int64 {
 	return 0
 }
 
-func (x *InstallSnapshotRequest) GetData() [][]byte {
+func (x *InstallSnapshotRequest) GetData() []byte {
 	if x != nil {
 		return x.Data
 	}
@@ -557,7 +557,7 @@ const file_raft_proto_rawDesc = "" +
 	"raft.proto\x12\araft.v1\"0\n" +
 	"\bLogEntry\x12\x12\n" +
 	"\x04Term\x18\x01 \x01(\x03R\x04Term\x12\x10\n" +
-	"\x03Cmd\x18\x02 \x03(\fR\x03Cmd\"\xd2\x01\n" +
+	"\x03Cmd\x18\x02 \x01(\fR\x03Cmd\"\xd2\x01\n" +
 	"\x13RaftPersistentState\x12 \n" +
 	"\vCurrentTerm\x18\x01 \x01(\x03R\vCurrentTerm\x12\x1a\n" +
 	"\bVotedFor\x18\x02 \x01(\x03R\bVotedFor\x12#\n" +
@@ -569,7 +569,7 @@ const file_raft_proto_rawDesc = "" +
 	"\bLeaderId\x18\x02 \x01(\x03R\bLeaderId\x12,\n" +
 	"\x11LastIncludedIndex\x18\x03 \x01(\x03R\x11LastIncludedIndex\x12*\n" +
 	"\x10LastIncludedTerm\x18\x04 \x01(\x03R\x10LastIncludedTerm\x12\x12\n" +
-	"\x04Data\x18\x05 \x03(\fR\x04Data\"-\n" +
+	"\x04Data\x18\x05 \x01(\fR\x04Data\"-\n" +
 	"\x17InstallSnapshotResponse\x12\x12\n" +
 	"\x04Term\x18\x01 \x01(\x03R\x04Term\"\x90\x01\n" +
 	"\x12RequestVoteRequest\x12\x12\n" +

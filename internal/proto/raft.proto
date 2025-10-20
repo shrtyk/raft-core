@@ -12,7 +12,7 @@ service RaftService {
 
 message LogEntry {
   int64 Term = 1;
-  repeated bytes Cmd = 2;
+  bytes Cmd = 2;
 }
 
 message RaftPersistentState {
@@ -28,7 +28,7 @@ message InstallSnapshotRequest {
   int64 LeaderId = 2;
   int64 LastIncludedIndex = 3;
   int64 LastIncludedTerm = 4;
-  repeated bytes Data = 5;
+  bytes Data = 5;
 }
 
 message InstallSnapshotResponse { int64 Term = 1; }
@@ -42,7 +42,7 @@ message RequestVoteRequest {
 
 message RequestVoteResponse {
   int64 Term = 1;
-  int64 VterId = 2;
+  int64 VoterId = 2;
   bool VoteGranted = 3;
 }
 
