@@ -340,7 +340,7 @@ func (x *RequestVoteRequest) GetLastLogTerm() int64 {
 type RequestVoteResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Term          int64                  `protobuf:"varint,1,opt,name=Term,proto3" json:"Term,omitempty"`
-	VterId        int64                  `protobuf:"varint,2,opt,name=VterId,proto3" json:"VterId,omitempty"`
+	VoterId       int64                  `protobuf:"varint,2,opt,name=VoterId,proto3" json:"VoterId,omitempty"`
 	VoteGranted   bool                   `protobuf:"varint,3,opt,name=VoteGranted,proto3" json:"VoteGranted,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -383,9 +383,9 @@ func (x *RequestVoteResponse) GetTerm() int64 {
 	return 0
 }
 
-func (x *RequestVoteResponse) GetVterId() int64 {
+func (x *RequestVoteResponse) GetVoterId() int64 {
 	if x != nil {
-		return x.VterId
+		return x.VoterId
 	}
 	return 0
 }
@@ -576,10 +576,10 @@ const file_raft_proto_rawDesc = "" +
 	"\x04Term\x18\x01 \x01(\x03R\x04Term\x12 \n" +
 	"\vCandidateId\x18\x02 \x01(\x03R\vCandidateId\x12\"\n" +
 	"\fLastLogIndex\x18\x03 \x01(\x03R\fLastLogIndex\x12 \n" +
-	"\vLastLogTerm\x18\x04 \x01(\x03R\vLastLogTerm\"c\n" +
+	"\vLastLogTerm\x18\x04 \x01(\x03R\vLastLogTerm\"e\n" +
 	"\x13RequestVoteResponse\x12\x12\n" +
-	"\x04Term\x18\x01 \x01(\x03R\x04Term\x12\x16\n" +
-	"\x06VterId\x18\x02 \x01(\x03R\x06VterId\x12 \n" +
+	"\x04Term\x18\x01 \x01(\x03R\x04Term\x12\x18\n" +
+	"\aVoterId\x18\x02 \x01(\x03R\aVoterId\x12 \n" +
 	"\vVoteGranted\x18\x03 \x01(\bR\vVoteGranted\"\xe7\x01\n" +
 	"\x14AppendEntriesRequest\x12\x12\n" +
 	"\x04Term\x18\x01 \x01(\x03R\x04Term\x12\x1a\n" +
