@@ -76,7 +76,7 @@ func (rf *Raft) resetHeartbeatTicker() {
 		default:
 		}
 	}
-	rf.heartbeatTicker.Reset(defaultHeartbeatInterval)
+	rf.heartbeatTicker.Reset(rf.cfg.HeartbeatTimeout)
 }
 
 // resetElectionTimer stops heartbeat ticker and resets election timer
@@ -90,11 +90,11 @@ func (rf *Raft) resetElectionTimer() {
 		default:
 		}
 	}
-	rf.electionTimer.Reset(randElectionIntervalMs())
+	rf.electionTimer.Reset(rf.randElectionInterval())
 }
 
-func randElectionIntervalMs() time.Duration {
-	return defaultElectionTimeoutBase + time.Duration(rand.Int63n(int64(defaultElectionTimeoutRand)))
+func (rf *Raft) randElectionInterval() time.Duration {
+	return rf.cfg.ElectionTimeoutBase + time.Duration(rand.Int63n(int64(rf.cfg.ElectionTimeoutRandomDelta)))
 }
 
 func (rf *Raft) killed() bool {

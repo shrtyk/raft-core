@@ -9,7 +9,7 @@ import (
 
 // startElection begins a new election
 func (rf *Raft) startElection() {
-	timeout := randElectionIntervalMs()
+	timeout := rf.randElectionInterval()
 
 	rf.mu.Lock()
 	rf.curTerm++

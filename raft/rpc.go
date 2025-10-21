@@ -146,7 +146,7 @@ func (rf *Raft) sendRequestVoteRPC(
 	server int,
 	req *raftpb.RequestVoteRequest,
 ) (*raftpb.RequestVoteResponse, error) {
-	ctx, cancel := context.WithTimeout(rf.raftCtx, defaultRpcTimeout)
+	ctx, cancel := context.WithTimeout(rf.raftCtx, rf.cfg.RPCTimeout)
 	defer cancel()
 
 	reply, err := rf.peers[server].RequestVote(ctx, req)
@@ -160,7 +160,7 @@ func (rf *Raft) sendAppendEntriesRPC(
 	server int,
 	req *raftpb.AppendEntriesRequest,
 ) (*raftpb.AppendEntriesResponse, error) {
-	ctx, cancel := context.WithTimeout(rf.raftCtx, defaultRpcTimeout)
+	ctx, cancel := context.WithTimeout(rf.raftCtx, rf.cfg.RPCTimeout)
 	defer cancel()
 
 	reply, err := rf.peers[server].AppendEntries(ctx, req)
@@ -174,7 +174,7 @@ func (rf *Raft) sendInstallSnapshotRPC(
 	server int,
 	args *raftpb.InstallSnapshotRequest,
 ) (*raftpb.InstallSnapshotResponse, error) {
-	ctx, cancel := context.WithTimeout(rf.raftCtx, defaultRpcTimeout)
+	ctx, cancel := context.WithTimeout(rf.raftCtx, rf.cfg.RPCTimeout)
 	defer cancel()
 
 	reply, err := rf.peers[server].InstallSnapshot(ctx, args)

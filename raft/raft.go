@@ -36,6 +36,7 @@ type Raft struct {
 	dead        int32             // set by Shutdown()
 
 	state State
+	cfg   *Config
 
 	timerMu         sync.Mutex
 	electionTimer   *time.Timer
@@ -131,12 +132,17 @@ func (rf *Raft) Shutdown() {
 func Make(
 	peerAddrs []string, me int64,
 	persister *tester.Persister, applyCh chan *api.ApplyMessage,
+	cfg *Config,
 ) api.Raft {
 	rf := &Raft{}
 	rf.peersConns = make([]*grpc.ClientConn, len(peerAddrs))
 	rf.peers = make([]raftpb.RaftServiceClient, len(peerAddrs))
 	rf.persister = persister
 	rf.me = me
+	if cfg == nil {
+		cfg = DefaultConfig()
+	}
+	rf.cfg = cfg
 
 	rf.raftCtx, rf.raftCancel = context.WithCancel(context.Background())
 
@@ -146,8 +152,8 @@ func Make(
 	rf.log = make([]*raftpb.LogEntry, 0)
 	rf.applyChan = applyCh
 
-	rf.electionTimer = time.NewTimer(randElectionIntervalMs())
-	rf.heartbeatTicker = time.NewTicker(defaultHeartbeatInterval)
+	rf.electionTimer = time.NewTimer(rf.randElectionInterval())
+	rf.heartbeatTicker = time.NewTicker(rf.cfg.HeartbeatTimeout)
 	rf.heartbeatTicker.Stop()
 
 	rf.readPersist(persister.ReadRaftState())
