@@ -18,7 +18,7 @@ func (rf *Raft) RequestVote(ctx context.Context,
 	}()
 
 	reply.VoteGranted = false
-	reply.VoterId = rf.me
+	reply.VoterId = int64(rf.me)
 
 	if req.Term < rf.curTerm {
 		reply.Term = rf.curTerm

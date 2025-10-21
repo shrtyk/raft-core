@@ -15,25 +15,16 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-type State = uint32
-
-const (
-	_ State = iota
-	follower
-	candidate
-	leader
-)
-
 // A Go object implementing a single Raft peer.
 type Raft struct {
 	wg          sync.WaitGroup
 	mu          sync.RWMutex               // Lock to protect shared access to this peer's state
 	peersConns  []*grpc.ClientConn         // underlying gRPC connections to be closed after shutdown
 	peers       []raftpb.RaftServiceClient // gRPC end points of all peers
-	persisterMu sync.Mutex
-	persister   *tester.Persister // Object to hold this peer's persisted state
-	me          int64             // this peer's index into peers[]
-	dead        int32             // set by Shutdown()
+	persisterMu sync.Mutex                 // Lock to protect non concurrent safe persister
+	persister   *tester.Persister          // Object to hold this peer's persisted state
+	me          int                        // this peer's index into peers[]
+	dead        int32                      // set by Shutdown()
 
 	state State
 	cfg   *Config
@@ -53,18 +44,24 @@ type Raft struct {
 
 	// Volatile state on all servers:
 
-	commitIdx      int64 // index of highest log entry known to be committed
-	lastAppliedIdx int64 // index of the highest log entry applied to state machine
+	// index of highest log entry known to be committed
+	commitIdx int64
+	// index of the highest log entry applied to state machine
+	lastAppliedIdx int64
 
 	// Volatile state leaders only (reinitialized after election):
 
-	// for each server, index of the next log entry to send to that server (initialized to leader last log index + 1)
+	// for each server, index of the next log entry
+	// to send to that server (initialized to leader last log index + 1)
 	nextIdx []int64
-	// for each server, index of highest log entry known to be replicated on server (initialized to 0, increases monotonically)
+	// for each server, index of highest log entry known
+	// to be replicated on server (initialized to 0, increases monotonically)
 	matchIdx []int64
 
-	lastIncludedIndex int64 // the index of the last entry in the log that the snapshot replaces
-	lastIncludedTerm  int64 // the term of the last entry in the log that the snapshot replaces
+	// the index of the last entry in the log that the snapshot replaces
+	lastIncludedIndex int64
+	// the term of the last entry in the log that the snapshot replaces
+	lastIncludedTerm int64
 
 	raftCtx    context.Context
 	raftCancel func()
@@ -106,7 +103,7 @@ func (rf *Raft) Start(command []byte) (int64, int64, bool) {
 
 	rf.persistAndUnlock(nil)
 
-	go rf.sendAppendEntries()
+	go rf.sendSnapshotOrEntries()
 
 	return lastLogIdx, term, isLeader
 }
@@ -117,7 +114,7 @@ func (rf *Raft) Shutdown() {
 	rf.raftCancel()
 
 	for i, c := range rf.peersConns {
-		if i == int(rf.me) {
+		if i == rf.me {
 			continue
 		}
 		if err := c.Close(); err != nil {
@@ -130,7 +127,7 @@ func (rf *Raft) Shutdown() {
 
 // Make creates and starts a new Raft peer
 func Make(
-	peerAddrs []string, me int64,
+	peerAddrs []string, me int,
 	persister *tester.Persister, applyCh chan *api.ApplyMessage,
 	cfg *Config,
 ) api.Raft {
@@ -180,7 +177,7 @@ func Make(
 	}()
 
 	for i, addr := range peerAddrs {
-		if i == int(rf.me) {
+		if i == rf.me {
 			continue
 		}
 

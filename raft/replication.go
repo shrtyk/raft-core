@@ -7,31 +7,6 @@ import (
 	raftpb "github.com/shrtyk/raft-core/internal/proto/gen"
 )
 
-func (rf *Raft) sendAppendEntries() {
-	rf.mu.RLock()
-	curTerm := rf.curTerm
-	rf.mu.RUnlock()
-
-	for i := range rf.peers {
-		if int64(i) == rf.me {
-			continue
-		}
-		go func(peerIdx int) {
-			rf.mu.RLock()
-			if rf.curTerm != curTerm || !rf.isState(leader) {
-				rf.mu.RUnlock()
-				return
-			}
-
-			if rf.nextIdx[peerIdx] <= rf.lastIncludedIndex {
-				rf.leaderSendSnapshot(peerIdx)
-			} else {
-				rf.leaderSendEntries(peerIdx)
-			}
-		}(i)
-	}
-}
-
 // leaderSendEntries handles sending log entries to a single peer
 //
 // Assumes the lock is held when called
@@ -45,7 +20,7 @@ func (rf *Raft) leaderSendEntries(peerIdx int) {
 
 	args := &raftpb.AppendEntriesRequest{
 		Term:              rf.curTerm,
-		LeaderId:          rf.me,
+		LeaderId:          int64(rf.me),
 		PrevLogIndex:      prevLogIdx,
 		PrevLogTerm:       prevLogTerm,
 		LeaderCommitIndex: rf.commitIdx,

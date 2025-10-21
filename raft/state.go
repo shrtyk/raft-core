@@ -27,7 +27,7 @@ func (rf *Raft) ticker() {
 			rf.mu.Unlock()
 		case <-rf.heartbeatTicker.C:
 			if rf.isState(leader) {
-				rf.sendAppendEntries()
+				rf.sendSnapshotOrEntries()
 			}
 		}
 	}

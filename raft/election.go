@@ -13,7 +13,7 @@ func (rf *Raft) startElection() {
 
 	rf.mu.Lock()
 	rf.curTerm++
-	rf.votedFor = rf.me
+	rf.votedFor = int64(rf.me)
 	rf.resetElectionTimer()
 	lastLogIdx, lastLogTerm := rf.lastLogIdxAndTerm()
 	currentTerm := rf.curTerm
@@ -23,7 +23,7 @@ func (rf *Raft) startElection() {
 	repliesChan := make(chan *raftpb.RequestVoteResponse, len(rf.peers)-1)
 	args := &raftpb.RequestVoteRequest{
 		Term:         currentTerm,
-		CandidateId:  rf.me,
+		CandidateId:  int64(rf.me),
 		LastLogIndex: lastLogIdx,
 		LastLogTerm:  lastLogTerm,
 	}
@@ -65,7 +65,7 @@ func (rf *Raft) countVotes(timeout time.Duration, repliesChan <-chan *raftpb.Req
 				if rf.isEnoughVotes(votes) {
 					rf.becomeLeader()
 					rf.mu.Unlock()
-					rf.sendAppendEntries()
+					rf.sendSnapshotOrEntries()
 					return
 				}
 			}

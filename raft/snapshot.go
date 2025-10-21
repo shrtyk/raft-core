@@ -35,7 +35,7 @@ func (rf *Raft) Snapshot(index int64, snapshot []byte) {
 func (rf *Raft) leaderSendSnapshot(peerIdx int) {
 	req := &raftpb.InstallSnapshotRequest{
 		Term:              rf.curTerm,
-		LeaderId:          rf.me,
+		LeaderId:          int64(rf.me),
 		LastIncludedIndex: rf.lastIncludedIndex,
 		LastIncludedTerm:  rf.lastIncludedTerm,
 		Data:              rf.persister.ReadSnapshot(),

@@ -2,6 +2,15 @@ package raft
 
 import "time"
 
+type State = uint32
+
+const (
+	_ State = iota
+	follower
+	candidate
+	leader
+)
+
 const votedForNone = -1
 
 type Config struct {
