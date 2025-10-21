@@ -14,15 +14,13 @@ type Raft interface {
 	Snapshot(index int64, snapshot []byte)
 	PersistBytes() int
 
-	// For the tester to indicate to your code that is should cleanup
-	// any long-running go routines.
-	Kill()
+	Shutdown()
 }
 
 type ApplyMessage struct {
-	CommandValid  bool
-	Command       []byte
-	CommandIndex  int64
+	CommandValid bool
+	Command      []byte
+	CommandIndex int64
 
 	SnapshotValid bool
 	Snapshot      []byte

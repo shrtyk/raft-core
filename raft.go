@@ -44,11 +44,12 @@ const (
 type Raft struct {
 	wg          sync.WaitGroup
 	mu          sync.RWMutex               // Lock to protect shared access to this peer's state
+	peersConns  []*grpc.ClientConn         // underlying gRPC connections to be closed after shutdown
 	peers       []raftpb.RaftServiceClient // gRPC end points of all peers
 	persisterMu sync.Mutex
 	persister   *tester.Persister // Object to hold this peer's persisted state
 	me          int64             // this peer's index into peers[]
-	dead        int32             // set by Kill()
+	dead        int32             // set by Shutdown()
 
 	state State
 
@@ -275,7 +276,7 @@ func (rf *Raft) unlockConditionally(needToPersist bool, snapshot []byte) {
 //
 // Assumes the lock is held when called
 func (rf *Raft) readPersist(data []byte) {
-	if data == nil || len(data) < 1 { // bootstrap without any state?
+	if len(data) < 1 { // bootstrap without any state?
 		return
 	}
 
@@ -323,18 +324,6 @@ func (rf *Raft) Snapshot(index int64, snapshot []byte) {
 
 	data := rf.getPersistentStateBytes()
 	rf.persister.Save(data, snapshot)
-}
-
-type InstallSnapshotArgs struct {
-	Term              int64
-	LeaderId          int64
-	LastIncludedIndex int64
-	LastIncludedTerm  int64
-	Data              []byte
-}
-
-type InstallSnapshotReply struct {
-	Term int64
 }
 
 func (rf *Raft) sendInstallSnapshotRPC(
@@ -416,10 +405,20 @@ func (rf *Raft) Start(command []byte) (int64, int64, bool) {
 	return lastLogIdx, term, isLeader
 }
 
-// Kill sets the peer to a dead state
-func (rf *Raft) Kill() {
+// Shutdown sets the peer to a dead state and stops completely
+func (rf *Raft) Shutdown() {
 	atomic.StoreInt32(&rf.dead, 1)
 	rf.raftCancel()
+
+	for i, c := range rf.peersConns {
+		if i == int(rf.me) {
+			continue
+		}
+		if err := c.Close(); err != nil {
+			log.Printf("failed to close connection for server #%d: %v", i, err)
+		}
+	}
+
 	rf.wg.Wait()
 }
 
@@ -916,6 +915,7 @@ func randElectionIntervalMs() time.Duration {
 func Make(peerAddrs []string, me int64,
 	persister *tester.Persister, applyCh chan *api.ApplyMessage) api.Raft {
 	rf := &Raft{}
+	rf.peersConns = make([]*grpc.ClientConn, len(peerAddrs))
 	rf.peers = make([]raftpb.RaftServiceClient, len(peerAddrs))
 	rf.persister = persister
 	rf.me = me
@@ -951,7 +951,7 @@ func Make(peerAddrs []string, me int64,
 
 	go func() {
 		if err := grpcServer.Serve(l); err != nil {
-			log.Fatalf("failed to serverr: %v", err)
+			log.Fatalf("failed to server: %v", err)
 		}
 	}()
 
@@ -966,6 +966,7 @@ func Make(peerAddrs []string, me int64,
 		}
 
 		client := raftpb.NewRaftServiceClient(conn)
+		rf.peersConns[i] = conn
 		rf.peers[i] = client
 	}
 
