@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"log/slog"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/shrtyk/raft-core/api"
 	raftpb "github.com/shrtyk/raft-core/internal/proto/gen"
+	"github.com/shrtyk/raft-core/pkg/logger"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -28,7 +30,7 @@ type Raft struct {
 	dead        int32                      // set by Shutdown()
 
 	state State
-	cfg   *Config
+	cfg   *RaftConfig
 
 	timerMu         sync.Mutex
 	electionTimer   *time.Timer
@@ -66,6 +68,7 @@ type Raft struct {
 
 	raftCtx    context.Context
 	raftCancel func()
+	logger     *slog.Logger
 
 	raftpb.UnimplementedRaftServiceServer
 }
@@ -134,29 +137,29 @@ func (rf *Raft) Stop() error {
 func Make(
 	peerAddrs []string, me int,
 	persister api.Persister, applyCh chan *api.ApplyMessage,
-	cfg *Config,
+	cfg *RaftConfig,
 ) (api.Raft, error) {
 	rf := &Raft{}
 	rf.peersConns = make([]*grpc.ClientConn, len(peerAddrs))
 	rf.peers = make([]raftpb.RaftServiceClient, len(peerAddrs))
 	rf.persister = persister
 	rf.me = me
+	rf.applyChan = applyCh
+
 	if cfg == nil {
 		cfg = DefaultConfig()
 	}
 	rf.cfg = cfg
 
 	rf.raftCtx, rf.raftCancel = context.WithCancel(context.Background())
-
+	rf.logger = logger.NewLogger(rf.cfg.Env)
 	rf.signalApplierChan = make(chan struct{}, 1)
-
-	atomic.StoreUint32(&rf.state, follower)
 	rf.log = make([]*raftpb.LogEntry, 0)
-	rf.applyChan = applyCh
 
 	rf.electionTimer = time.NewTimer(rf.randElectionInterval())
 	rf.heartbeatTicker = time.NewTicker(rf.cfg.HeartbeatTimeout)
 	rf.heartbeatTicker.Stop()
+	rf.becomeFollower(-1)
 
 	state, err := persister.ReadRaftState()
 	if err != nil {

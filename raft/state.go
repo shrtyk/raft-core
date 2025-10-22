@@ -40,7 +40,8 @@ func (rf *Raft) isState(state State) bool {
 	return atomic.LoadUint32(&rf.state) == state
 }
 
-// becomeFollower transitions the peer to the follower state and return true if need to persist state
+// becomeFollower transitions the peer to the follower state
+// and return true if need to persist state.
 //
 // Assumes the lock is held when called
 func (rf *Raft) becomeFollower(term int64) (needToPersist bool) {

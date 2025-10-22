@@ -1,6 +1,10 @@
 package raft
 
-import "time"
+import (
+	"time"
+
+	"github.com/shrtyk/raft-core/pkg/logger"
+)
 
 type State = uint32
 
@@ -13,15 +17,17 @@ const (
 
 const votedForNone = -1
 
-type Config struct {
+type RaftConfig struct {
+	Env                        logger.Enviroment
 	ElectionTimeoutBase        time.Duration
 	ElectionTimeoutRandomDelta time.Duration
 	HeartbeatTimeout           time.Duration
 	RPCTimeout                 time.Duration
 }
 
-func DefaultConfig() *Config {
-	return &Config{
+func DefaultConfig() *RaftConfig {
+	return &RaftConfig{
+		Env:                        logger.Dev,
 		ElectionTimeoutBase:        300 * time.Millisecond,
 		ElectionTimeoutRandomDelta: 300 * time.Millisecond,
 		HeartbeatTimeout:           70 * time.Millisecond,
