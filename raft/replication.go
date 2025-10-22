@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/shrtyk/raft-core/api"
 	raftpb "github.com/shrtyk/raft-core/internal/proto/gen"
 )
 
@@ -42,14 +41,8 @@ func (rf *Raft) processAppendEntriesReply(peerIdx int, req *raftpb.AppendEntries
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 
-	if req.Term != rf.curTerm {
-		return fmt.Errorf("%w Ignoring AppendEntries reply from peer #%d.", api.ErrOutdatedTerm, peerIdx)
-	}
-
-	if reply.Term > rf.curTerm {
-		rf.becomeFollower(reply.Term)
-		rf.resetElectionTimer()
-		return fmt.Errorf("%w AppendEntries reply recieved from peer #%d.", api.ErrHigherTerm, peerIdx)
+	if err := rf.checkOrUpdateTerm("AppendEntries", peerIdx, req.Term, reply.Term); err != nil {
+		return err
 	}
 
 	if reply.Success {

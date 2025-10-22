@@ -60,14 +60,8 @@ func (rf *Raft) leaderSendSnapshot(peerIdx int) error {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 
-	if rf.curTerm != req.Term {
-		return fmt.Errorf("%w Ignoring InstallSnapshot reply from peer #%d.", api.ErrOutdatedTerm, peerIdx)
-	}
-
-	if reply.Term > rf.curTerm {
-		rf.becomeFollower(reply.Term)
-		rf.resetElectionTimer()
-		return fmt.Errorf("%w InstallSnapshot reply recieved from peer #%d.", api.ErrHigherTerm, peerIdx)
+	if err := rf.checkOrUpdateTerm("InstallSnapshot", peerIdx, req.Term, reply.Term); err != nil {
+		return err
 	}
 
 	rf.matchIdx[peerIdx] = max(rf.matchIdx[peerIdx], req.LastIncludedIndex)

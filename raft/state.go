@@ -1,9 +1,12 @@
 package raft
 
 import (
+	"fmt"
 	"math/rand"
 	"sync/atomic"
 	"time"
+
+	"github.com/shrtyk/raft-core/api"
 )
 
 // ticker is the main state machine loop for a Raft peer
@@ -91,6 +94,24 @@ func (rf *Raft) resetElectionTimer() {
 		}
 	}
 	rf.electionTimer.Reset(rf.randElectionInterval())
+}
+
+// checkOrUpdateTerm validates the term from an RPC reply.
+// It returns an error if the request's term is outdated. If the reply
+// indicates a higher term, it transitions the node to a follower state.
+//
+// Assumes the lock is held when called.
+func (rf *Raft) checkOrUpdateTerm(rpcCallName string, peerIdx int, reqTerm, replyTerm int64) error {
+	if rf.curTerm != reqTerm {
+		return fmt.Errorf("%w Ignoring %s reply from peer #%d.", api.ErrOutdatedTerm, rpcCallName, peerIdx)
+	}
+
+	if replyTerm > rf.curTerm {
+		rf.becomeFollower(replyTerm)
+		rf.resetElectionTimer()
+		return fmt.Errorf("%w %s reply recieved from peer #%d.", api.ErrHigherTerm, rpcCallName, peerIdx)
+	}
+	return nil
 }
 
 func (rf *Raft) randElectionInterval() time.Duration {
