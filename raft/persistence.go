@@ -30,7 +30,7 @@ func (rf *Raft) getPersistentStateBytes() []byte {
 // unlocks the main mutex, and then persists the state
 //
 // It must be called with rf.mu held, and it will unlock it
-func (rf *Raft) persistAndUnlock(snapshot []byte) {
+func (rf *Raft) persistAndUnlock(snapshot []byte) error {
 	state := rf.getPersistentStateBytes()
 	rf.persisterMu.Lock()
 	rf.mu.Unlock()
@@ -38,10 +38,9 @@ func (rf *Raft) persistAndUnlock(snapshot []byte) {
 	defer rf.persisterMu.Unlock()
 
 	if snapshot == nil {
-		rf.persister.Save(state, rf.persister.ReadSnapshot())
-		return
+		return rf.persister.SaveRaftState(state)
 	}
-	rf.persister.Save(state, snapshot)
+	return rf.persister.SaveStateAndSnapshot(state, snapshot)
 }
 
 // unlockConditionally unlocks the main mutex, and persists the state if needed

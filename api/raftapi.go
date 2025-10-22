@@ -1,5 +1,13 @@
 package api
 
+import "errors"
+
+var (
+	ErrOutdatedTerm = errors.New("raft: term has been updated.")
+	ErrHigherTerm   = errors.New("raft: recieved higher term in reply.")
+	ErrOldSnapshot  = errors.New("raft: snapshot index is not newer than the last included index.")
+)
+
 // The Raft interface
 type Raft interface {
 	// Start agreement on a new log entry, and return the log index
@@ -11,8 +19,8 @@ type Raft interface {
 	GetState() (int64, bool)
 
 	// For Snaphots
-	Snapshot(index int64, snapshot []byte)
-	PersistBytes() int
+	Snapshot(index int64, snapshot []byte) error
+	PersistBytes() (int, error)
 
 	Shutdown()
 }

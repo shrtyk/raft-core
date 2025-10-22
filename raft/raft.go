@@ -2,6 +2,7 @@ package raft
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net"
 	"sync"
@@ -10,7 +11,6 @@ import (
 
 	"github.com/shrtyk/raft-core/api"
 	raftpb "github.com/shrtyk/raft-core/internal/proto/gen"
-	tester "github.com/shrtyk/raft/tester1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -21,8 +21,8 @@ type Raft struct {
 	mu          sync.RWMutex               // Lock to protect shared access to this peer's state
 	peersConns  []*grpc.ClientConn         // underlying gRPC connections to be closed after shutdown
 	peers       []raftpb.RaftServiceClient // gRPC end points of all peers
-	persisterMu sync.Mutex                 // Lock to protect non concurrent safe persister
-	persister   *tester.Persister          // Object to hold this peer's persisted state
+	persisterMu sync.RWMutex               // Lock to protect non concurrent safe persister
+	persister   api.Persister              // Object to hold this peer's persisted state
 	me          int                        // this peer's index into peers[]
 	dead        int32                      // set by Shutdown()
 
@@ -76,9 +76,10 @@ func (rf *Raft) GetState() (int64, bool) {
 	return rf.curTerm, rf.isState(leader)
 }
 
-func (rf *Raft) PersistBytes() int {
-	rf.mu.RLock()
-	defer rf.mu.RUnlock()
+func (rf *Raft) PersistBytes() (int, error) {
+	rf.persisterMu.RLock()
+	defer rf.persisterMu.RUnlock()
+
 	return rf.persister.RaftStateSize()
 }
 
@@ -128,9 +129,9 @@ func (rf *Raft) Shutdown() {
 // Make creates and starts a new Raft peer
 func Make(
 	peerAddrs []string, me int,
-	persister *tester.Persister, applyCh chan *api.ApplyMessage,
+	persister api.Persister, applyCh chan *api.ApplyMessage,
 	cfg *Config,
-) api.Raft {
+) (api.Raft, error) {
 	rf := &Raft{}
 	rf.peersConns = make([]*grpc.ClientConn, len(peerAddrs))
 	rf.peers = make([]raftpb.RaftServiceClient, len(peerAddrs))
@@ -153,7 +154,11 @@ func Make(
 	rf.heartbeatTicker = time.NewTicker(rf.cfg.HeartbeatTimeout)
 	rf.heartbeatTicker.Stop()
 
-	rf.readPersist(persister.ReadRaftState())
+	state, err := persister.ReadRaftState()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read peer #%d state: %w", me, err)
+	}
+	rf.readPersist(state)
 
 	lastLogIdx, _ := rf.lastLogIdxAndTerm()
 	rf.nextIdx = make([]int64, len(peerAddrs))
@@ -167,7 +172,7 @@ func Make(
 
 	l, err := net.Listen("tcp", peerAddrs[me])
 	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
+		return nil, fmt.Errorf("failed to listen: %v", err)
 	}
 
 	go func() {
@@ -183,7 +188,7 @@ func Make(
 
 		conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
-			log.Fatalf("failed to connect: %v", err)
+			return nil, fmt.Errorf("failed to establish connection: %w", err)
 		}
 
 		client := raftpb.NewRaftServiceClient(conn)
@@ -195,5 +200,5 @@ func Make(
 	go rf.applier()
 	go rf.ticker()
 
-	return rf
+	return rf, nil
 }

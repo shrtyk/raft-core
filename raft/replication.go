@@ -1,16 +1,17 @@
 package raft
 
 import (
-	"log"
+	"fmt"
 	"slices"
 
+	"github.com/shrtyk/raft-core/api"
 	raftpb "github.com/shrtyk/raft-core/internal/proto/gen"
 )
 
 // leaderSendEntries handles sending log entries to a single peer
 //
 // Assumes the lock is held when called
-func (rf *Raft) leaderSendEntries(peerIdx int) {
+func (rf *Raft) leaderSendEntries(peerIdx int) error {
 	prevLogIdx := rf.nextIdx[peerIdx] - 1
 	prevLogTerm := rf.getTerm(prevLogIdx)
 
@@ -30,33 +31,25 @@ func (rf *Raft) leaderSendEntries(peerIdx int) {
 
 	reply, err := rf.sendAppendEntriesRPC(peerIdx, args)
 	if err != nil {
-		// TODO: better handling
-		log.Printf("failed to send AppendEntries to server $%d: %v", peerIdx, err)
-		return
+		return fmt.Errorf("failed to send AppendEntries to peer #%d: %w", peerIdx, err)
 	}
 
+	return rf.processAppendEntriesReply(peerIdx, args, reply)
+}
+
+// processAppendEntriesReply processes the reply from an AppendEntries RPC
+func (rf *Raft) processAppendEntriesReply(peerIdx int, req *raftpb.AppendEntriesRequest, reply *raftpb.AppendEntriesResponse) error {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 
-	if rf.curTerm != args.Term {
-		return
+	if req.Term != rf.curTerm {
+		return fmt.Errorf("%w Ignoring AppendEntries reply from peer #%d.", api.ErrOutdatedTerm, peerIdx)
 	}
 
-	rf.handleAppendEntriesReply(peerIdx, args, reply)
-}
-
-// handleAppendEntriesReply processes the reply from an AppendEntries RPC
-//
-// Assumes the lock is held when called
-func (rf *Raft) handleAppendEntriesReply(peerIdx int, req *raftpb.AppendEntriesRequest, reply *raftpb.AppendEntriesResponse) {
 	if reply.Term > rf.curTerm {
 		rf.becomeFollower(reply.Term)
 		rf.resetElectionTimer()
-		return
-	}
-
-	if !rf.isState(leader) || req.Term != rf.curTerm {
-		return
+		return fmt.Errorf("%w AppendEntries reply recieved from peer #%d.", api.ErrHigherTerm, peerIdx)
 	}
 
 	if reply.Success {
@@ -71,10 +64,11 @@ func (rf *Raft) handleAppendEntriesReply(peerIdx int, req *raftpb.AppendEntriesR
 		if rf.commitIdx != lastCommitIdx {
 			rf.signalApplier()
 		}
-		return
+		return nil
 	}
 
 	rf.updateNextIndexAfterConflict(peerIdx, reply)
+	return nil
 }
 
 // updateNextIndexAfterConflict is a helper function to update a follower's nextIdx
@@ -97,6 +91,10 @@ func (rf *Raft) updateNextIndexAfterConflict(peerIdx int, reply *raftpb.AppendEn
 	rf.nextIdx[peerIdx] = reply.ConflictIndex
 }
 
+// tryToCommit updating leader commit index
+// if majority of peers got higher commit index
+//
+// Assumes the lock is held when called.
 func (rf *Raft) tryToCommit() {
 	matchIdxCopy := make([]int64, len(rf.matchIdx))
 	copy(matchIdxCopy, rf.matchIdx)

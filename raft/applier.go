@@ -1,6 +1,10 @@
 package raft
 
-import "github.com/shrtyk/raft-core/api"
+import (
+	"log"
+
+	"github.com/shrtyk/raft-core/api"
+)
 
 // applies committed log entries to the state machine in the background
 func (rf *Raft) applier() {
@@ -23,9 +27,20 @@ func (rf *Raft) applier() {
 
 				var msg api.ApplyMessage
 				if rf.lastAppliedIdx < rf.lastIncludedIndex {
+
+					rf.persisterMu.RLock()
+					snapshot, err := rf.persister.ReadSnapshot()
+					if err != nil {
+						// TODO: better handling
+						log.Printf("failed to read snapshot: %v", err)
+						rf.persisterMu.Unlock()
+						continue
+					}
+					rf.persisterMu.Unlock()
+
 					msg = api.ApplyMessage{
 						SnapshotValid: true,
-						Snapshot:      rf.persister.ReadSnapshot(),
+						Snapshot:      snapshot,
 						SnapshotTerm:  rf.lastIncludedTerm,
 						SnapshotIndex: rf.lastIncludedIndex,
 					}

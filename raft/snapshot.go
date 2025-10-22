@@ -1,17 +1,18 @@
 package raft
 
 import (
-	"log"
+	"fmt"
 
+	"github.com/shrtyk/raft-core/api"
 	raftpb "github.com/shrtyk/raft-core/internal/proto/gen"
 )
 
-func (rf *Raft) Snapshot(index int64, snapshot []byte) {
+func (rf *Raft) Snapshot(index int64, snapshot []byte) error {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 
 	if index <= rf.lastIncludedIndex {
-		return
+		return api.ErrOldSnapshot
 	}
 
 	term := rf.getTerm(index)
@@ -26,42 +27,50 @@ func (rf *Raft) Snapshot(index int64, snapshot []byte) {
 	rf.lastIncludedTerm = term
 
 	data := rf.getPersistentStateBytes()
-	rf.persister.Save(data, snapshot)
+	return rf.persister.SaveStateAndSnapshot(data, snapshot)
 }
 
 // leaderSendSnapshot handles sending a snapshot to a single peer
 //
 // Assumes the lock is held when called
-func (rf *Raft) leaderSendSnapshot(peerIdx int) {
+func (rf *Raft) leaderSendSnapshot(peerIdx int) error {
+	rf.persisterMu.RLock()
+	snapshot, err := rf.persister.ReadSnapshot()
+	if err != nil {
+		// TODO: better handling
+		rf.persisterMu.Unlock()
+		return fmt.Errorf("failed to read snapshot: %v", err)
+	}
+	rf.persisterMu.Unlock()
+
 	req := &raftpb.InstallSnapshotRequest{
 		Term:              rf.curTerm,
 		LeaderId:          int64(rf.me),
 		LastIncludedIndex: rf.lastIncludedIndex,
 		LastIncludedTerm:  rf.lastIncludedTerm,
-		Data:              rf.persister.ReadSnapshot(),
+		Data:              snapshot,
 	}
 	rf.mu.RUnlock()
 
 	reply, err := rf.sendInstallSnapshotRPC(peerIdx, req)
 	if err != nil {
-		// TODO: better handling
-		log.Printf("failed to send InstallSnapshot to server #%d: %v", peerIdx, err)
-		return
+		return fmt.Errorf("failed to send InstallSnapshot to peer #%d: %v", peerIdx, err)
 	}
 
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 
 	if rf.curTerm != req.Term {
-		return
+		return fmt.Errorf("%w Ignoring InstallSnapshot reply from peer #%d.", api.ErrOutdatedTerm, peerIdx)
 	}
 
 	if reply.Term > rf.curTerm {
 		rf.becomeFollower(reply.Term)
 		rf.resetElectionTimer()
-		return
+		return fmt.Errorf("%w InstallSnapshot reply recieved from peer #%d.", api.ErrHigherTerm, peerIdx)
 	}
 
 	rf.matchIdx[peerIdx] = max(rf.matchIdx[peerIdx], req.LastIncludedIndex)
 	rf.nextIdx[peerIdx] = rf.matchIdx[peerIdx] + 1
+	return nil
 }
