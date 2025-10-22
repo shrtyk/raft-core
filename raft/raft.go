@@ -2,6 +2,7 @@ package raft
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -69,22 +70,22 @@ type Raft struct {
 	raftpb.UnimplementedRaftServiceServer
 }
 
-// GetState returns current term and whether this server believes it is the leader
-func (rf *Raft) GetState() (int64, bool) {
+// State returns current term and whether this server believes it is the leader
+func (rf *Raft) State() (int64, bool) {
 	rf.mu.RLock()
 	defer rf.mu.RUnlock()
 	return rf.curTerm, rf.isState(leader)
 }
 
-func (rf *Raft) PersistBytes() (int, error) {
+func (rf *Raft) PersistedStateSize() (int, error) {
 	rf.persisterMu.RLock()
 	defer rf.persisterMu.RUnlock()
 
 	return rf.persister.RaftStateSize()
 }
 
-// Start proposes a new command to be replicated
-func (rf *Raft) Start(command []byte) (int64, int64, bool) {
+// Submit proposes a new command to be replicated
+func (rf *Raft) Submit(command []byte) (int64, int64, bool) {
 	rf.mu.Lock()
 
 	isLeader := rf.isState(leader)
@@ -109,8 +110,9 @@ func (rf *Raft) Start(command []byte) (int64, int64, bool) {
 	return lastLogIdx, term, isLeader
 }
 
-// Shutdown sets the peer to a dead state and stops completely
-func (rf *Raft) Shutdown() {
+// Stop sets the peer to a dead state and stops completely
+func (rf *Raft) Stop() error {
+	var err error
 	atomic.StoreInt32(&rf.dead, 1)
 	rf.raftCancel()
 
@@ -119,11 +121,13 @@ func (rf *Raft) Shutdown() {
 			continue
 		}
 		if err := c.Close(); err != nil {
-			log.Printf("failed to close connection for server #%d: %v", i, err)
+			cerr := fmt.Errorf("failed to close connection for server #%d: %v", i, err)
+			err = errors.Join(err, cerr)
 		}
 	}
 
 	rf.wg.Wait()
+	return err
 }
 
 // Make creates and starts a new Raft peer

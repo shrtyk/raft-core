@@ -8,21 +8,37 @@ var (
 	ErrOldSnapshot  = errors.New("raft: snapshot index is not newer than the last included index.")
 )
 
-// The Raft interface
+// Raft defines the public interface exposed by a single Raft peer.
+// It allows higher-level services to propose commands, query leadership state,
+// and manage snapshots and lifecycle events.
 type Raft interface {
-	// Start agreement on a new log entry, and return the log index
-	// for that entry, the term, and whether the peer is the leader.
-	Start(command []byte) (int64, int64, bool)
+	// Propose submits a new command to the Raft cluster for replication.
+	//
+	// Returns:
+	//   - index: the log index assigned to this command (if accepted)
+	//   - term:  the current term at the time of submission
+	//   - isLeader: true if this peer believes it is the current leader
+	//
+	// If isLeader is false, the command was not accepted and should be redirected
+	// to leader.
+	//
+	// This is non blocking call.
+	Submit(command []byte) (index int64, term int64, isLeader bool)
 
-	// Ask a Raft for its current term, and whether it thinks it is
-	// leader
-	GetState() (int64, bool)
+	// State returns the current term and whether this peer believes it is the leader.
+	State() (int64, bool)
 
-	// For Snaphots
+	// Snapshot informs Raft that the service has created a snapshot
+	// that replaces all log entries up through the given index.
 	Snapshot(index int64, snapshot []byte) error
-	PersistBytes() (int, error)
 
-	Shutdown()
+	// PersistedSize returns the size in bytes of the persisted Raft state.
+	// Typically used by tests.
+	PersistedStateSize() (int, error)
+
+	// Stop gracefully terminates the Raft instance, closing all background
+	// goroutines and network connections.
+	Stop() error
 }
 
 type ApplyMessage struct {
