@@ -26,6 +26,7 @@ func (rf *Raft) applier() {
 
 				var msg api.ApplyMessage
 				if rf.lastAppliedIdx < rf.lastIncludedIndex {
+					rf.logger.Info("applying snapshot to state machine", "index", rf.lastIncludedIndex)
 
 					rf.persisterMu.RLock()
 					snapshot, err := rf.persister.ReadSnapshot()
@@ -45,6 +46,7 @@ func (rf *Raft) applier() {
 					}
 				} else {
 					applyIdx := rf.lastAppliedIdx + 1
+					rf.logger.Debug("applying command to state machine", "index", applyIdx)
 					sliceIdx := applyIdx - rf.lastIncludedIndex - 1
 					msg = api.ApplyMessage{
 						CommandValid: true,

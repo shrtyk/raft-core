@@ -97,6 +97,11 @@ func (rf *Raft) tryToCommit() {
 	newCommitIdx := matchIdxCopy[majorityIdx]
 
 	if newCommitIdx > rf.commitIdx && rf.getTerm(newCommitIdx) == rf.curTerm {
+		rf.logger.Debug(
+			"advancing commit index",
+			"old_commit_idx", rf.commitIdx,
+			"new_commit_idx", newCommitIdx,
+		)
 		rf.commitIdx = newCommitIdx
 	}
 }

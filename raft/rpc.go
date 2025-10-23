@@ -21,6 +21,12 @@ func (rf *Raft) RequestVote(ctx context.Context,
 	reply.VoterId = int64(rf.me)
 
 	if req.Term < rf.curTerm {
+		rf.logger.Warn(
+			"denying vote, candidate term too low",
+			"candidate_id", req.CandidateId,
+			"candidate_term", req.Term,
+			"current_term", rf.curTerm,
+		)
 		reply.Term = rf.curTerm
 		return
 	}
@@ -30,13 +36,34 @@ func (rf *Raft) RequestVote(ctx context.Context,
 	}
 
 	reply.Term = rf.curTerm
-	if rf.isCandidateLogUpToDate(req.LastLogIndex, req.LastLogTerm) &&
-		(rf.votedFor == votedForNone || rf.votedFor == req.CandidateId) {
-		reply.VoteGranted = true
-		rf.votedFor = req.CandidateId
-		needToPersist = true
-		rf.resetElectionTimer()
+	if !rf.isCandidateLogUpToDate(req.LastLogIndex, req.LastLogTerm) {
+		rf.logger.Warn(
+			"denying vote, candidate log not up-to-date",
+			"candidate_id", req.CandidateId,
+			"candidate_last_log_idx", req.LastLogIndex,
+			"candidate_last_log_term", req.LastLogTerm,
+		)
+		return
 	}
+
+	if rf.votedFor != votedForNone && rf.votedFor != req.CandidateId {
+		rf.logger.Warn(
+			"denying vote, already voted for another candidate",
+			"candidate_id", req.CandidateId,
+			"voted_for", rf.votedFor,
+		)
+		return
+	}
+
+	reply.VoteGranted = true
+	rf.votedFor = req.CandidateId
+	needToPersist = true
+	rf.resetElectionTimer()
+	rf.logger.Info(
+		"voting for candidate",
+		"candidate_id", req.CandidateId,
+		"term", rf.curTerm,
+	)
 
 	return
 }
@@ -54,6 +81,12 @@ func (rf *Raft) AppendEntries(ctx context.Context,
 			rf.signalApplier()
 		}
 	}()
+
+	if len(req.Entries) == 0 {
+		rf.logger.Debug("heartbeat received", "leader_id", req.LeaderId, "term", req.Term)
+	} else {
+		rf.logger.Debug("append entries received", "leader_id", req.LeaderId, "term", req.Term, "num_entries", len(req.Entries))
+	}
 
 	reply.Success = false
 	reply.Term = rf.curTerm
@@ -74,6 +107,11 @@ func (rf *Raft) AppendEntries(ctx context.Context,
 	}
 
 	if !rf.isLogConsistent(req.PrevLogIndex, req.PrevLogTerm) {
+		rf.logger.Warn(
+			"log inconsistent, rejecting append entries",
+			"prev_log_idx", req.PrevLogIndex,
+			"prev_log_term", req.PrevLogTerm,
+		)
 		rf.fillConflictReply(req, reply)
 		return
 	}
@@ -117,6 +155,13 @@ func (rf *Raft) InstallSnapshot(ctx context.Context,
 	}
 
 	rf.resetElectionTimer()
+
+	rf.logger.Info(
+		"installing snapshot",
+		"leader_id", req.LeaderId,
+		"last_included_index", req.LastIncludedIndex,
+	)
+
 	if req.LastIncludedIndex <= rf.lastIncludedIndex {
 		return
 	}

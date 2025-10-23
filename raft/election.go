@@ -13,6 +13,7 @@ func (rf *Raft) startElection() {
 
 	rf.mu.Lock()
 	rf.curTerm++
+	rf.logger.Info("starting election", "term", rf.curTerm)
 	rf.votedFor = int64(rf.me)
 	rf.resetElectionTimer()
 	lastLogIdx, lastLogTerm := rf.lastLogIdxAndTerm()
@@ -61,6 +62,7 @@ func (rf *Raft) countVotes(timeout time.Duration, repliesChan <-chan *raftpb.Req
 				rf.mu.Unlock()
 				return
 			} else if reply.VoteGranted && rf.isState(candidate) {
+				rf.logger.Debug("vote granted", "voter_id", reply.VoterId)
 				votes[reply.VoterId] = true
 				if rf.isEnoughVotes(votes) {
 					rf.becomeLeader()

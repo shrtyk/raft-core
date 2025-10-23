@@ -45,6 +45,7 @@ func (rf *Raft) isState(state State) bool {
 //
 // Assumes the lock is held when called
 func (rf *Raft) becomeFollower(term int64) (needToPersist bool) {
+	rf.logger.Info("transitioning to follower", "term", term)
 	atomic.StoreUint32(&rf.state, follower)
 	if term > rf.curTerm {
 		rf.curTerm = term
@@ -59,6 +60,7 @@ func (rf *Raft) becomeFollower(term int64) (needToPersist bool) {
 //
 // Assumes the lock is held when called
 func (rf *Raft) becomeLeader() {
+	rf.logger.Info("transitioning to leader", "term", rf.curTerm)
 	atomic.StoreUint32(&rf.state, leader)
 	rf.resetHeartbeatTicker()
 
