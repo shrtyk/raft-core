@@ -69,6 +69,7 @@ type Raft struct {
 	raftCtx    context.Context
 	raftCancel func()
 	logger     *slog.Logger
+	grpcServer *grpc.Server
 
 	raftpb.UnimplementedRaftServiceServer
 }
@@ -118,6 +119,7 @@ func (rf *Raft) Stop() error {
 	var err error
 	atomic.StoreInt32(&rf.dead, 1)
 	rf.raftCancel()
+	rf.grpcServer.GracefulStop()
 
 	for i, c := range rf.peersConns {
 		if i == rf.me {
@@ -174,8 +176,8 @@ func Make(
 	}
 	rf.matchIdx = make([]int64, len(peerAddrs))
 
-	grpcServer := grpc.NewServer()
-	raftpb.RegisterRaftServiceServer(grpcServer, rf)
+	rf.grpcServer = grpc.NewServer()
+	raftpb.RegisterRaftServiceServer(rf.grpcServer, rf)
 
 	l, err := net.Listen("tcp", peerAddrs[me])
 	if err != nil {
@@ -183,7 +185,7 @@ func Make(
 	}
 
 	go func() {
-		if err := grpcServer.Serve(l); err != nil {
+		if err := rf.grpcServer.Serve(l); err != nil {
 			rf.logger.Error("failed to serve", logger.ErrAttr(err))
 			os.Exit(1)
 		}
@@ -194,7 +196,8 @@ func Make(
 			continue
 		}
 
-		conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		conn, err := grpc.NewClient(
+			addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
 			return nil, fmt.Errorf("failed to establish connection: %w", err)
 		}
