@@ -117,25 +117,52 @@ func (p *DefaultStorage) ReadSnapshot() ([]byte, error) {
 }
 
 func (p *DefaultStorage) SaveRaftState(state []byte) error {
-	currentSnapshot, err := p.ReadSnapshot()
-	if err != nil {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	var currentSnapshot []byte
+	_, snapshotPath, err := p.resolvePaths()
+	if err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	return p.SaveStateAndSnapshot(state, currentSnapshot)
+
+	currentSnapshot, _ = os.ReadFile(snapshotPath)
+	return p.saveStateAndSnapshotUnlocked(state, currentSnapshot)
 }
 
 func (p *DefaultStorage) SaveSnapshot(snapshot []byte) error {
-	currentState, err := p.ReadRaftState()
-	if err != nil {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	var currentState []byte
+	statePath, _, err := p.resolvePaths()
+	if err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	return p.SaveStateAndSnapshot(currentState, snapshot)
+	if err == nil {
+		currentState, err = os.ReadFile(statePath)
+		if err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+
+	if currentState == nil {
+		return errors.New("cannot save snapshot without existing raft state")
+	}
+
+	return p.saveStateAndSnapshotUnlocked(currentState, snapshot)
 }
 
 func (p *DefaultStorage) SaveStateAndSnapshot(state, snapshot []byte) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	return p.saveStateAndSnapshotUnlocked(state, snapshot)
+}
 
+// saveStateAndSnapshotUnlocked contains the core swap logic
+//
+// Assumes the lock is held when called
+func (p *DefaultStorage) saveStateAndSnapshotUnlocked(state, snapshot []byte) error {
 	versionName := strconv.FormatInt(time.Now().UnixNano(), 10)
 	newVersionPath := filepath.Join(p.versions, versionName)
 	if err := os.MkdirAll(newVersionPath, 0755); err != nil {
