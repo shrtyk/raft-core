@@ -2,6 +2,7 @@ package storage
 
 import (
 	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/shrtyk/raft-core/api"
+	"github.com/shrtyk/raft-core/pkg/logger"
 )
 
 const (
@@ -28,6 +30,7 @@ var _ api.Persister = (*DefaultStorage)(nil)
 // Safe for concurrent use.
 type DefaultStorage struct {
 	mu           sync.RWMutex
+	logger       *slog.Logger
 	dir          string
 	current      string
 	versions     string
@@ -35,7 +38,7 @@ type DefaultStorage struct {
 }
 
 // NewDefaultStorage creates a new DefaultStorage in the given directory.
-func NewDefaultStorage(dir string) (*DefaultStorage, error) {
+func NewDefaultStorage(dir string, logger *slog.Logger) (*DefaultStorage, error) {
 	versionsPath := filepath.Join(dir, versionsDirName)
 	if err := os.MkdirAll(versionsPath, 0755); err != nil {
 		return nil, err
@@ -48,6 +51,7 @@ func NewDefaultStorage(dir string) (*DefaultStorage, error) {
 	}
 
 	return &DefaultStorage{
+		logger:       logger,
 		dir:          dir,
 		current:      filepath.Join(dir, currentSymlinkName),
 		versions:     versionsPath,
@@ -243,6 +247,12 @@ func (p *DefaultStorage) cleanupVersions() {
 
 	for _, versionName := range versionsToDelete {
 		pathToDelete := filepath.Join(p.versions, versionName)
-		os.RemoveAll(pathToDelete) // TODO: log the error
+		if err := os.RemoveAll(pathToDelete); err != nil {
+			p.logger.Warn(
+				"failed to delete outdated version",
+				"version", versionName,
+				logger.ErrAttr(err),
+			)
+		}
 	}
 }

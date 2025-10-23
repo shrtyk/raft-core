@@ -14,6 +14,7 @@ import (
 	"github.com/shrtyk/raft-core/api"
 	raftpb "github.com/shrtyk/raft-core/internal/proto/gen"
 	"github.com/shrtyk/raft-core/pkg/logger"
+	"github.com/shrtyk/raft-core/pkg/storage"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -30,7 +31,7 @@ type Raft struct {
 	dead        int32                      // set by Shutdown()
 
 	state State
-	cfg   *RaftConfig
+	cfg   *api.RaftConfig
 
 	timerMu         sync.Mutex
 	electionTimer   *time.Timer
@@ -139,22 +140,31 @@ func (rf *Raft) Stop() error {
 func Make(
 	peerAddrs []string, me int,
 	persister api.Persister, applyCh chan *api.ApplyMessage,
-	cfg *RaftConfig,
+	cfg *api.RaftConfig,
 ) (api.Raft, error) {
 	rf := &Raft{}
 	rf.peersConns = make([]*grpc.ClientConn, len(peerAddrs))
 	rf.peers = make([]raftpb.RaftServiceClient, len(peerAddrs))
-	rf.persister = persister
 	rf.me = me
 	rf.applyChan = applyCh
 
 	if cfg == nil {
 		cfg = DefaultConfig()
 	}
+
 	rf.cfg = cfg
+	rf.logger = logger.NewLogger(rf.cfg.Env)
+
+	if persister == nil {
+		s, err := storage.NewDefaultStorage("data", rf.logger)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize default storage: %w", err)
+		}
+		persister = s
+	}
+	rf.persister = persister
 
 	rf.raftCtx, rf.raftCancel = context.WithCancel(context.Background())
-	rf.logger = logger.NewLogger(rf.cfg.Env)
 	rf.signalApplierChan = make(chan struct{}, 1)
 	rf.log = make([]*raftpb.LogEntry, 0)
 

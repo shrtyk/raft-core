@@ -3,6 +3,7 @@ package raft
 import (
 	"time"
 
+	"github.com/shrtyk/raft-core/api"
 	"github.com/shrtyk/raft-core/pkg/logger"
 )
 
@@ -17,16 +18,8 @@ const (
 
 const votedForNone = -1
 
-type RaftConfig struct {
-	Env                        logger.Enviroment
-	ElectionTimeoutBase        time.Duration
-	ElectionTimeoutRandomDelta time.Duration
-	HeartbeatTimeout           time.Duration
-	RPCTimeout                 time.Duration
-}
-
-func DefaultConfig() *RaftConfig {
-	return &RaftConfig{
+func DefaultConfig() *api.RaftConfig {
+	return &api.RaftConfig{
 		Env:                        logger.Dev,
 		ElectionTimeoutBase:        300 * time.Millisecond,
 		ElectionTimeoutRandomDelta: 300 * time.Millisecond,
