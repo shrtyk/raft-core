@@ -1,8 +1,10 @@
 package storage
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -15,6 +17,7 @@ const (
 	snapshotFileName   = "snapshot.bin"
 	versionsDirName    = "versions"
 	currentSymlinkName = "current"
+	versionsToKeep     = 2
 )
 
 var _ api.Persister = (*DefaultStorage)(nil)
@@ -24,10 +27,11 @@ var _ api.Persister = (*DefaultStorage)(nil)
 //
 // Safe for concurrent use.
 type DefaultStorage struct {
-	mu       sync.RWMutex
-	dir      string
-	current  string
-	versions string
+	mu           sync.RWMutex
+	dir          string
+	current      string
+	versions     string
+	versionNames []string
 }
 
 // NewDefaultStorage creates a new DefaultStorage in the given directory.
@@ -37,11 +41,34 @@ func NewDefaultStorage(dir string) (*DefaultStorage, error) {
 		return nil, err
 	}
 
+	// Restores initial versions list from the filesystem.
+	versionNames, err := restoreVersionNames(versionsPath)
+	if err != nil {
+		return nil, err
+	}
+
 	return &DefaultStorage{
-		dir:      dir,
-		current:  filepath.Join(dir, currentSymlinkName),
-		versions: versionsPath,
+		dir:          dir,
+		current:      filepath.Join(dir, currentSymlinkName),
+		versions:     versionsPath,
+		versionNames: versionNames,
 	}, nil
+}
+
+func restoreVersionNames(versionsPath string) ([]string, error) {
+	entries, err := os.ReadDir(versionsPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var versionNames []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			versionNames = append(versionNames, entry.Name())
+		}
+	}
+	sort.Strings(versionNames)
+	return versionNames, nil
 }
 
 // resolvePaths reads the symlink, find the active version directory
@@ -197,5 +224,25 @@ func (p *DefaultStorage) saveStateAndSnapshotUnlocked(state, snapshot []byte) er
 		return err
 	}
 
+	p.versionNames = append(p.versionNames, versionName)
+	go p.cleanupVersions()
+
 	return nil
+}
+
+func (p *DefaultStorage) cleanupVersions() {
+	p.mu.Lock()
+	if len(p.versionNames) <= versionsToKeep {
+		p.mu.Unlock()
+		return
+	}
+
+	versionsToDelete := p.versionNames[:len(p.versionNames)-versionsToKeep]
+	p.versionNames = p.versionNames[len(p.versionNames)-versionsToKeep:]
+	p.mu.Unlock()
+
+	for _, versionName := range versionsToDelete {
+		pathToDelete := filepath.Join(p.versions, versionName)
+		os.RemoveAll(pathToDelete) // TODO: log the error
+	}
 }
