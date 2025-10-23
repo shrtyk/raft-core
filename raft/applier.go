@@ -1,9 +1,8 @@
 package raft
 
 import (
-	"log"
-
 	"github.com/shrtyk/raft-core/api"
+	"github.com/shrtyk/raft-core/pkg/logger"
 )
 
 // applies committed log entries to the state machine in the background
@@ -32,7 +31,7 @@ func (rf *Raft) applier() {
 					snapshot, err := rf.persister.ReadSnapshot()
 					if err != nil {
 						// TODO: better handling
-						log.Printf("failed to read snapshot: %v", err)
+						rf.logger.Warn("failed to read snapshot", logger.ErrAttr(err))
 						rf.persisterMu.Unlock()
 						continue
 					}

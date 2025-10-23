@@ -35,3 +35,7 @@ func NewLogger(env Enviroment) *slog.Logger {
 	})
 	return slog.New(h)
 }
+
+func ErrAttr(err error) slog.Attr {
+	return slog.String("error", err.Error())
+}

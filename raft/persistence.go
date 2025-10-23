@@ -1,9 +1,8 @@
 package raft
 
 import (
-	"log"
-
 	raftpb "github.com/shrtyk/raft-core/internal/proto/gen"
+	"github.com/shrtyk/raft-core/pkg/logger"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -19,7 +18,7 @@ func (rf *Raft) getPersistentStateBytes() []byte {
 		LastIncludedTerm:  rf.lastIncludedTerm,
 	})
 	if err != nil {
-		log.Printf("failed to marshal state: %s", err)
+		rf.logger.Error("failed to marshal state", logger.ErrAttr(err))
 		return nil
 	}
 
@@ -65,7 +64,7 @@ func (rf *Raft) readPersist(data []byte) {
 	state := &raftpb.RaftPersistentState{}
 	err := proto.Unmarshal(data, state)
 	if err != nil {
-		log.Printf("failed to unmarshal data into state struct: %s", err)
+		rf.logger.Error("failed to unmarshal data into state struct", logger.ErrAttr(err))
 		return
 	}
 

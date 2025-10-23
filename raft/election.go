@@ -1,10 +1,10 @@
 package raft
 
 import (
-	"log"
 	"time"
 
 	raftpb "github.com/shrtyk/raft-core/internal/proto/gen"
+	"github.com/shrtyk/raft-core/pkg/logger"
 )
 
 // startElection begins a new election
@@ -35,7 +35,7 @@ func (rf *Raft) startElection() {
 			reply, err := rf.sendRequestVoteRPC(idx, args)
 			if err != nil {
 				// TODO: better handling
-				log.Printf("failed to get response from server #%d", idx)
+				rf.logger.Warn("failed to get vote response from peer", "peer_id", idx, logger.ErrAttr(err))
 				return
 			}
 			repliesChan <- reply

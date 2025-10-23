@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"log/slog"
 	"net"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -184,7 +184,8 @@ func Make(
 
 	go func() {
 		if err := grpcServer.Serve(l); err != nil {
-			log.Fatalf("failed to serve: %v", err)
+			rf.logger.Error("failed to serve", logger.ErrAttr(err))
+			os.Exit(1)
 		}
 	}()
 
