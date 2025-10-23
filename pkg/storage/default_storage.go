@@ -80,6 +80,35 @@ func (p *DefaultStorage) ReadSnapshot() ([]byte, error) {
 }
 
 func (p *DefaultStorage) SaveStateAndSnapshot(state, snapshot []byte) error {
-	// TODO: Implement
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	stateTmpPath := p.statePath + ".tmp"
+	snapshotTmpPath := p.snapshotPath + ".tmp"
+
+	if err := os.WriteFile(stateTmpPath, state, 0644); err != nil {
+		return err
+	}
+
+	if err := os.WriteFile(snapshotTmpPath, snapshot, 0644); err != nil {
+		os.Remove(stateTmpPath)
+		return err
+	}
+
+	// TODO: implement more more robust way of handling following part
+	// Atomically rename files.
+	// There is a small window of inconsistency if a crash occurs between the two renames.
+
+	if err := os.Rename(stateTmpPath, p.statePath); err != nil {
+		os.Remove(stateTmpPath)
+		os.Remove(snapshotTmpPath)
+		return err
+	}
+
+	if err := os.Rename(snapshotTmpPath, p.snapshotPath); err != nil {
+		// At this point, state is new but snapshot is old. This is the inconsistent state.
+		return err
+	}
+
 	return nil
 }
