@@ -34,32 +34,52 @@ func NewDefaultStorage(dir string) (*DefaultStorage, error) {
 	}, nil
 }
 
-func (s *DefaultStorage) SaveRaftState(state []byte) error {
-	// TODO: Implement
-	return nil
+func (p *DefaultStorage) SaveRaftState(state []byte) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return os.WriteFile(p.statePath, state, 0644)
 }
 
-func (s *DefaultStorage) ReadRaftState() ([]byte, error) {
-	// TODO: Implement
-	return nil, nil
+func (p *DefaultStorage) ReadRaftState() ([]byte, error) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	data, err := os.ReadFile(p.statePath)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	return data, err
 }
 
-func (s *DefaultStorage) RaftStateSize() (int, error) {
-	// TODO: Implement
-	return 0, nil
+func (p *DefaultStorage) RaftStateSize() (int, error) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	info, err := os.Stat(p.statePath)
+	if os.IsNotExist(err) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	return int(info.Size()), nil
 }
 
-func (s *DefaultStorage) SaveSnapshot(snapshot []byte) error {
-	// TODO: Implement
-	return nil
+func (p *DefaultStorage) SaveSnapshot(snapshot []byte) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return os.WriteFile(p.snapshotPath, snapshot, 0644)
 }
 
-func (s *DefaultStorage) ReadSnapshot() ([]byte, error) {
-	// TODO: Implement
-	return nil, nil
+func (p *DefaultStorage) ReadSnapshot() ([]byte, error) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	data, err := os.ReadFile(p.snapshotPath)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	return data, err
 }
 
-func (s *DefaultStorage) SaveStateAndSnapshot(state, snapshot []byte) error {
+func (p *DefaultStorage) SaveStateAndSnapshot(state, snapshot []byte) error {
 	// TODO: Implement
 	return nil
 }
