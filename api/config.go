@@ -12,4 +12,6 @@ type RaftConfig struct {
 	ElectionTimeoutRandomDelta time.Duration
 	HeartbeatTimeout           time.Duration
 	RPCTimeout                 time.Duration
+	ShutdownTimeout            time.Duration
+	MonitoringAddr             string
 }
