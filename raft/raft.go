@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"net/http"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -67,10 +68,11 @@ type Raft struct {
 	// the term of the last entry in the log that the snapshot replaces
 	lastIncludedTerm int64
 
-	raftCtx    context.Context
-	raftCancel func()
-	logger     *slog.Logger
-	grpcServer *grpc.Server
+	raftCtx          context.Context
+	raftCancel       func()
+	logger           *slog.Logger
+	grpcServer       *grpc.Server
+	monitoringServer *http.Server
 
 	raftpb.UnimplementedRaftServiceServer
 }
@@ -117,30 +119,38 @@ func (rf *Raft) Submit(command []byte) (int64, int64, bool) {
 
 // Stop sets the peer to a dead state and stops completely
 func (rf *Raft) Stop() error {
+	tctx, tcancel := context.WithTimeout(rf.raftCtx, rf.cfg.ShutdownTimeout)
+	defer tcancel()
+
 	var err error
 	atomic.StoreInt32(&rf.dead, 1)
-	rf.raftCancel()
 	rf.grpcServer.GracefulStop()
+
+	if rf.monitoringServer != nil {
+		if shutdownErr := rf.monitoringServer.Shutdown(tctx); shutdownErr != nil {
+			err = errors.Join(err, fmt.Errorf("failed to shutdown monitoring server: %w", shutdownErr))
+		}
+	}
 
 	for i, c := range rf.peersConns {
 		if i == rf.me {
 			continue
 		}
-		if err := c.Close(); err != nil {
-			cerr := fmt.Errorf("failed to close connection for server #%d: %v", i, err)
+		if closeErr := c.Close(); closeErr != nil {
+			cerr := fmt.Errorf("failed to close connection for server #%d: %v", i, closeErr)
 			err = errors.Join(err, cerr)
 		}
 	}
 
+	rf.raftCancel()
 	rf.wg.Wait()
 	return err
 }
 
 // Make creates and starts a new Raft peer
 func Make(
-	peerAddrs []string, me int,
+	cfg *api.RaftConfig, peerAddrs []string, me int,
 	persister api.Persister, applyCh chan *api.ApplyMessage,
-	cfg *api.RaftConfig,
 ) (api.Raft, error) {
 	rf := &Raft{}
 	rf.peersConns = make([]*grpc.ClientConn, len(peerAddrs))
@@ -220,6 +230,7 @@ func Make(
 	rf.wg.Add(2)
 	go rf.applier()
 	go rf.ticker()
+	rf.startMonitoringServer()
 
 	return rf, nil
 }
