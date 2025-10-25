@@ -201,31 +201,48 @@ func (p *DefaultStorage) saveStateAndSnapshotUnlocked(state, snapshot []byte) er
 	}
 
 	statePath := filepath.Join(newVersionPath, stateFileName)
-	if err := os.WriteFile(statePath, state, 0644); err != nil {
-		os.RemoveAll(newVersionPath)
-		return err
+	if err := writeAndSyncFile(statePath, state, 0644); err != nil {
+		return errors.Join(err, os.RemoveAll(newVersionPath))
 	}
 
 	if snapshot != nil {
 		snapshotPath := filepath.Join(newVersionPath, snapshotFileName)
-		if err := os.WriteFile(snapshotPath, snapshot, 0644); err != nil {
-			os.RemoveAll(newVersionPath)
-			return err
+		if err := writeAndSyncFile(snapshotPath, snapshot, 0644); err != nil {
+			return errors.Join(err, os.RemoveAll(newVersionPath))
 		}
+	}
+
+	// Sync the new version directory to make sure file entries are durable.
+	if err := syncDir(newVersionPath); err != nil {
+		return errors.Join(err, os.RemoveAll(newVersionPath))
 	}
 
 	tmpSymlinkPath := p.current + ".tmp"
 	symlinkTarget := filepath.Join(versionsDirName, versionName)
 
+	// Try to remove any temporary symlink from a previous failed operation.
+	if err := os.Remove(tmpSymlinkPath); err != nil && !os.IsNotExist(err) {
+		return errors.Join(err, os.RemoveAll(newVersionPath))
+
+	}
+
 	if err := os.Symlink(symlinkTarget, tmpSymlinkPath); err != nil {
-		os.RemoveAll(newVersionPath)
-		return err
+		return errors.Join(err, os.RemoveAll(newVersionPath))
+	}
+
+	// Sync the parent directory to make the temporary symlink durable.
+	if err := syncDir(p.dir); err != nil {
+		return errors.Join(err, os.RemoveAll(newVersionPath), os.Remove(tmpSymlinkPath))
 	}
 
 	if err := os.Rename(tmpSymlinkPath, p.current); err != nil {
-		os.Remove(tmpSymlinkPath)
-		os.RemoveAll(newVersionPath)
-		return err
+		return errors.Join(err, os.RemoveAll(newVersionPath), os.Remove(tmpSymlinkPath))
+	}
+
+	// Sync the parent directory again to make the rename durable.
+	if err := syncDir(p.dir); err != nil {
+		// The state is updated, but not guaranteed to be durable.
+		p.logger.Warn("failed to sync directory after rename", logger.ErrAttr(err))
 	}
 
 	p.versionNames = append(p.versionNames, versionName)
@@ -255,4 +272,41 @@ func (p *DefaultStorage) cleanupVersions() {
 			)
 		}
 	}
+}
+
+// writeAndSyncFile opens or creates a file, writes data to it
+// and calls Sync to ensure the data is flushed to stable storage.
+func writeAndSyncFile(filename string, data []byte, perm os.FileMode) error {
+	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)
+	if err != nil {
+		return err
+	}
+	_, err = f.Write(data)
+	if err == nil {
+		err = f.Sync()
+	}
+	if closeErr := f.Close(); err == nil {
+		err = closeErr
+	}
+	return err
+}
+
+// syncDir opens a directory and calls Sync to ensure its metadata is flushed to stable storage.
+func syncDir(dir string) (err error) {
+	f, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		if cerr := f.Close(); cerr != nil {
+			if err != nil {
+				err = errors.Join(err, cerr)
+			} else {
+				err = cerr
+			}
+		}
+	}()
+
+	return f.Sync()
 }
