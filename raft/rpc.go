@@ -2,7 +2,6 @@ package raft
 
 import (
 	"context"
-	"fmt"
 
 	raftpb "github.com/shrtyk/raft-core/internal/proto/gen"
 )
@@ -185,46 +184,4 @@ func (rf *Raft) InstallSnapshot(ctx context.Context,
 	}
 
 	return
-}
-
-func (rf *Raft) sendRequestVoteRPC(
-	server int,
-	req *raftpb.RequestVoteRequest,
-) (*raftpb.RequestVoteResponse, error) {
-	ctx, cancel := context.WithTimeout(rf.raftCtx, rf.cfg.RPCTimeout)
-	defer cancel()
-
-	reply, err := rf.peers[server].RequestVote(ctx, req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to call server #%d RequestVote: %v", server, err)
-	}
-	return reply, nil
-}
-
-func (rf *Raft) sendAppendEntriesRPC(
-	server int,
-	req *raftpb.AppendEntriesRequest,
-) (*raftpb.AppendEntriesResponse, error) {
-	ctx, cancel := context.WithTimeout(rf.raftCtx, rf.cfg.RPCTimeout)
-	defer cancel()
-
-	reply, err := rf.peers[server].AppendEntries(ctx, req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to call server #%d AppendEntries: %v", server, err)
-	}
-	return reply, nil
-}
-
-func (rf *Raft) sendInstallSnapshotRPC(
-	server int,
-	args *raftpb.InstallSnapshotRequest,
-) (*raftpb.InstallSnapshotResponse, error) {
-	ctx, cancel := context.WithTimeout(rf.raftCtx, rf.cfg.RPCTimeout)
-	defer cancel()
-
-	reply, err := rf.peers[server].InstallSnapshot(ctx, args)
-	if err != nil {
-		return nil, fmt.Errorf("failed to call server #%d InstallSnapshot: %v", server, err)
-	}
-	return reply, nil
 }

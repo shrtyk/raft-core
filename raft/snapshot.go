@@ -49,7 +49,7 @@ func (rf *Raft) leaderSendSnapshot(peerIdx int) error {
 	}
 	rf.mu.RUnlock()
 
-	reply, err := rf.sendInstallSnapshotRPC(peerIdx, req)
+	reply, err := rf.transport.SendInstallSnapshot(rf.raftCtx, peerIdx, req)
 	if err != nil {
 		return fmt.Errorf("failed to send InstallSnapshot to peer #%d: %v", peerIdx, err)
 	}

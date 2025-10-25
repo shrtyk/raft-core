@@ -12,7 +12,7 @@ func (rf *Raft) sendSnapshotOrEntries() {
 	curTerm := rf.curTerm
 	rf.mu.RUnlock()
 
-	for i := range rf.peers {
+	for i := range rf.peersCount {
 		if i == rf.me {
 			continue
 		}

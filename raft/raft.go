@@ -17,18 +17,17 @@ import (
 	"github.com/shrtyk/raft-core/pkg/logger"
 	"github.com/shrtyk/raft-core/pkg/storage"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 // A Go object implementing a single Raft peer.
 type Raft struct {
 	wg         sync.WaitGroup
-	mu         sync.RWMutex               // Lock to protect shared access to this peer's state
-	peersConns []*grpc.ClientConn         // underlying gRPC connections to be closed after shutdown
-	peers      []raftpb.RaftServiceClient // gRPC end points of all peers
-	persister  api.Persister              // Object to hold this peer's persisted state (should be concurrent safe)
-	me         int                        // this peer's index into peers[]
-	dead       int32                      // set by Shutdown()
+	mu         sync.RWMutex // Lock to protect shared access to this peer's state
+	peersCount int
+	transport  api.Transport
+	persister  api.Persister // Object to hold this peer's persisted state (should be concurrent safe)
+	me         int           // this peer's index into peers[]
+	dead       int32         // set by Shutdown()
 
 	state State
 	cfg   *api.RaftConfig
@@ -128,16 +127,7 @@ func (rf *Raft) Stop() error {
 		}
 	}
 
-	for i, c := range rf.peersConns {
-		if i == rf.me {
-			continue
-		}
-		if closeErr := c.Close(); closeErr != nil {
-			cerr := fmt.Errorf("failed to close connection for server #%d: %v", i, closeErr)
-			err = errors.Join(err, cerr)
-		}
-	}
-
+	err = rf.transport.Close()
 	rf.raftCancel()
 	rf.wg.Wait()
 	return err
@@ -149,8 +139,7 @@ func Make(
 	persister api.Persister, applyCh chan *api.ApplyMessage,
 ) (api.Raft, error) {
 	rf := &Raft{}
-	rf.peersConns = make([]*grpc.ClientConn, len(peerAddrs))
-	rf.peers = make([]raftpb.RaftServiceClient, len(peerAddrs))
+	rf.peersCount = len(peerAddrs)
 	rf.me = me
 	rf.applyChan = applyCh
 
@@ -207,21 +196,11 @@ func Make(
 		}
 	}()
 
-	for i, addr := range peerAddrs {
-		if i == rf.me {
-			continue
-		}
-
-		conn, err := grpc.NewClient(
-			addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-		if err != nil {
-			return nil, fmt.Errorf("failed to establish connection: %w", err)
-		}
-
-		client := raftpb.NewRaftServiceClient(conn)
-		rf.peersConns[i] = conn
-		rf.peers[i] = client
+	tr, err := NewGRPCTransport(cfg.RPCTimeout, peerAddrs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create transport: %w", err)
 	}
+	rf.transport = tr
 
 	rf.wg.Add(2)
 	go rf.applier()

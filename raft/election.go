@@ -21,19 +21,19 @@ func (rf *Raft) startElection() {
 
 	rf.persistAndUnlock(nil)
 
-	repliesChan := make(chan *raftpb.RequestVoteResponse, len(rf.peers)-1)
+	repliesChan := make(chan *raftpb.RequestVoteResponse, rf.peersCount-1)
 	args := &raftpb.RequestVoteRequest{
 		Term:         currentTerm,
 		CandidateId:  int64(rf.me),
 		LastLogIndex: lastLogIdx,
 		LastLogTerm:  lastLogTerm,
 	}
-	for i := range rf.peers {
+	for i := range rf.peersCount {
 		if i == int(rf.me) {
 			continue
 		}
 		go func(idx int) {
-			reply, err := rf.sendRequestVoteRPC(idx, args)
+			reply, err := rf.transport.SendRequestVote(rf.raftCtx, idx, args)
 			if err != nil {
 				// TODO: better handling
 				rf.logger.Warn("failed to get vote response from peer", "peer_id", idx, logger.ErrAttr(err))
@@ -47,7 +47,7 @@ func (rf *Raft) startElection() {
 }
 
 func (rf *Raft) countVotes(timeout time.Duration, repliesChan <-chan *raftpb.RequestVoteResponse) {
-	votes := make([]bool, len(rf.peers))
+	votes := make([]bool, rf.peersCount)
 	votes[rf.me] = true
 
 	for {
@@ -83,5 +83,5 @@ func (rf *Raft) isEnoughVotes(votes []bool) bool {
 			vc++
 		}
 	}
-	return vc > len(rf.peers)/2
+	return vc > rf.peersCount/2
 }

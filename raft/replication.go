@@ -28,7 +28,7 @@ func (rf *Raft) leaderSendEntries(peerIdx int) error {
 	}
 	rf.mu.RUnlock()
 
-	reply, err := rf.sendAppendEntriesRPC(peerIdx, args)
+	reply, err := rf.transport.SendAppendEntries(rf.raftCtx, peerIdx, args)
 	if err != nil {
 		return fmt.Errorf("failed to send AppendEntries to peer #%d: %w", peerIdx, err)
 	}
@@ -93,7 +93,7 @@ func (rf *Raft) tryToCommit() {
 	copy(matchIdxCopy, rf.matchIdx)
 
 	slices.Sort(matchIdxCopy)
-	majorityIdx := len(rf.peers) / 2
+	majorityIdx := rf.peersCount / 2
 	newCommitIdx := matchIdxCopy[majorityIdx]
 
 	if newCommitIdx > rf.commitIdx && rf.getTerm(newCommitIdx) == rf.curTerm {

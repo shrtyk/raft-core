@@ -84,7 +84,7 @@ func (h *statusHandler) getStatus() status {
 		s.LeaderSpecific = &leaderSpecificStatus{
 			PeerReplicationInfo: make(map[string]peerReplicationInfo),
 		}
-		for i := range h.rf.peers {
+		for i := range h.rf.peersCount {
 			s.LeaderSpecific.PeerReplicationInfo[strconv.Itoa(i)] = peerReplicationInfo{
 				MatchIndex: h.rf.matchIdx[i],
 				NextIndex:  h.rf.nextIdx[i],
