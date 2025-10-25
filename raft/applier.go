@@ -28,15 +28,12 @@ func (rf *Raft) applier() {
 				if rf.lastAppliedIdx < rf.lastIncludedIndex {
 					rf.logger.Info("applying snapshot to state machine", "index", rf.lastIncludedIndex)
 
-					rf.persisterMu.RLock()
 					snapshot, err := rf.persister.ReadSnapshot()
 					if err != nil {
 						// TODO: better handling
 						rf.logger.Warn("failed to read snapshot", logger.ErrAttr(err))
-						rf.persisterMu.Unlock()
 						continue
 					}
-					rf.persisterMu.Unlock()
 
 					msg = api.ApplyMessage{
 						SnapshotValid: true,

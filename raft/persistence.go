@@ -31,10 +31,7 @@ func (rf *Raft) getPersistentStateBytes() []byte {
 // It must be called with rf.mu held, and it will unlock it
 func (rf *Raft) persistAndUnlock(snapshot []byte) error {
 	state := rf.getPersistentStateBytes()
-	rf.persisterMu.Lock()
 	rf.mu.Unlock()
-
-	defer rf.persisterMu.Unlock()
 
 	if snapshot == nil {
 		return rf.persister.SaveRaftState(state)
@@ -53,10 +50,8 @@ func (rf *Raft) unlockConditionally(needToPersist bool, snapshot []byte) {
 	}
 }
 
-// readPersist restores previously persisted state
-//
-// Assumes the lock is held when called
-func (rf *Raft) readPersist(data []byte) {
+// restoreState restores previously persisted state from data
+func (rf *Raft) restoreState(data []byte) {
 	if len(data) < 1 { // bootstrap without any state?
 		return
 	}

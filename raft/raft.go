@@ -22,14 +22,13 @@ import (
 
 // A Go object implementing a single Raft peer.
 type Raft struct {
-	wg          sync.WaitGroup
-	mu          sync.RWMutex               // Lock to protect shared access to this peer's state
-	peersConns  []*grpc.ClientConn         // underlying gRPC connections to be closed after shutdown
-	peers       []raftpb.RaftServiceClient // gRPC end points of all peers
-	persisterMu sync.RWMutex               // Lock to protect non concurrent safe persister
-	persister   api.Persister              // Object to hold this peer's persisted state
-	me          int                        // this peer's index into peers[]
-	dead        int32                      // set by Shutdown()
+	wg         sync.WaitGroup
+	mu         sync.RWMutex               // Lock to protect shared access to this peer's state
+	peersConns []*grpc.ClientConn         // underlying gRPC connections to be closed after shutdown
+	peers      []raftpb.RaftServiceClient // gRPC end points of all peers
+	persister  api.Persister              // Object to hold this peer's persisted state (should be concurrent safe)
+	me         int                        // this peer's index into peers[]
+	dead       int32                      // set by Shutdown()
 
 	state State
 	cfg   *api.RaftConfig
@@ -85,9 +84,6 @@ func (rf *Raft) State() (int64, bool) {
 }
 
 func (rf *Raft) PersistedStateSize() (int, error) {
-	rf.persisterMu.RLock()
-	defer rf.persisterMu.RUnlock()
-
 	return rf.persister.RaftStateSize()
 }
 
@@ -187,7 +183,7 @@ func Make(
 	if err != nil {
 		return nil, fmt.Errorf("failed to read peer #%d state: %w", me, err)
 	}
-	rf.readPersist(state)
+	rf.restoreState(state)
 
 	lastLogIdx, _ := rf.lastLogIdxAndTerm()
 	rf.nextIdx = make([]int64, len(peerAddrs))

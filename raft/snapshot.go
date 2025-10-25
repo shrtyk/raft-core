@@ -34,14 +34,11 @@ func (rf *Raft) Snapshot(index int64, snapshot []byte) error {
 //
 // Assumes the lock is held when called
 func (rf *Raft) leaderSendSnapshot(peerIdx int) error {
-	rf.persisterMu.RLock()
 	snapshot, err := rf.persister.ReadSnapshot()
 	if err != nil {
 		// TODO: better handling
-		rf.persisterMu.Unlock()
 		return fmt.Errorf("failed to read snapshot: %v", err)
 	}
-	rf.persisterMu.Unlock()
 
 	req := &raftpb.InstallSnapshotRequest{
 		Term:              rf.curTerm,
