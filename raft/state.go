@@ -2,37 +2,31 @@ package raft
 
 import (
 	"fmt"
-	"math/rand"
 	"sync/atomic"
-	"time"
 
 	"github.com/shrtyk/raft-core/api"
 )
 
-// ticker is the main state machine loop for a Raft peer
-func (rf *Raft) ticker() {
-	defer func() {
-		rf.heartbeatTicker.Stop()
-		rf.electionTimer.Stop()
-		rf.wg.Done()
-	}()
+type State = uint32
 
-	for {
-		select {
-		case <-rf.raftCtx.Done():
-			return
-		case <-rf.electionTimer.C:
-			rf.mu.Lock()
-			if !rf.isState(leader) {
-				atomic.StoreUint32(&rf.state, candidate)
-				go rf.startElection()
-			}
-			rf.mu.Unlock()
-		case <-rf.heartbeatTicker.C:
-			if rf.isState(leader) {
-				rf.sendSnapshotOrEntries()
-			}
-		}
+const (
+	_ State = iota
+	follower
+	candidate
+	leader
+)
+
+// stateToString converts a State to its string representation.
+func stateToString(s State) string {
+	switch s {
+	case follower:
+		return "follower"
+	case candidate:
+		return "candidate"
+	case leader:
+		return "leader"
+	default:
+		return "unknown"
 	}
 }
 
@@ -72,33 +66,6 @@ func (rf *Raft) becomeLeader() {
 	rf.matchIdx[rf.me] = lastLogIdx
 }
 
-// activateLeaderTimers stops election timer and starts heartbeat ticker
-func (rf *Raft) resetHeartbeatTicker() {
-	rf.timerMu.Lock()
-	defer rf.timerMu.Unlock()
-	if !rf.electionTimer.Stop() {
-		select {
-		case <-rf.electionTimer.C:
-		default:
-		}
-	}
-	rf.heartbeatTicker.Reset(rf.cfg.HeartbeatTimeout)
-}
-
-// resetElectionTimer stops heartbeat ticker and resets election timer
-func (rf *Raft) resetElectionTimer() {
-	rf.timerMu.Lock()
-	defer rf.timerMu.Unlock()
-	rf.heartbeatTicker.Stop()
-	if !rf.electionTimer.Stop() {
-		select {
-		case <-rf.electionTimer.C:
-		default:
-		}
-	}
-	rf.electionTimer.Reset(rf.randElectionInterval())
-}
-
 // checkOrUpdateTerm validates the term from an RPC reply.
 // It returns an error if the request's term is outdated. If the reply
 // indicates a higher term, it transitions the node to a follower state.
@@ -115,10 +82,6 @@ func (rf *Raft) checkOrUpdateTerm(rpcCallName string, peerIdx int, reqTerm, repl
 		return fmt.Errorf("%w %s reply recieved from peer #%d.", api.ErrHigherTerm, rpcCallName, peerIdx)
 	}
 	return nil
-}
-
-func (rf *Raft) randElectionInterval() time.Duration {
-	return rf.cfg.ElectionTimeoutBase + time.Duration(rand.Int63n(int64(rf.cfg.ElectionTimeoutRandomDelta)))
 }
 
 func (rf *Raft) killed() bool {

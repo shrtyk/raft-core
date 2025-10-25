@@ -95,20 +95,6 @@ func (h *statusHandler) getStatus() status {
 	return s
 }
 
-// stateToString converts a State to its string representation.
-func stateToString(s State) string {
-	switch s {
-	case follower:
-		return "follower"
-	case candidate:
-		return "candidate"
-	case leader:
-		return "leader"
-	default:
-		return "unknown"
-	}
-}
-
 // startMonitoringServer starts the HTTP server for monitoring.
 func (rf *Raft) startMonitoringServer() {
 	if rf.cfg.MonitoringAddr == "" {

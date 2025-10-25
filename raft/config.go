@@ -7,15 +7,6 @@ import (
 	"github.com/shrtyk/raft-core/pkg/logger"
 )
 
-type State = uint32
-
-const (
-	_ State = iota
-	follower
-	candidate
-	leader
-)
-
 const votedForNone = -1
 
 func DefaultConfig() *api.RaftConfig {
