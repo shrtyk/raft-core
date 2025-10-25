@@ -1,5 +1,11 @@
 package raft
 
+import (
+	"log/slog"
+
+	"github.com/shrtyk/raft-core/pkg/logger"
+)
+
 // sendSnapshotOrEntries is invoked by the leader to replicate its state to all peers
 func (rf *Raft) sendSnapshotOrEntries() {
 	rf.mu.RLock()
@@ -17,10 +23,15 @@ func (rf *Raft) sendSnapshotOrEntries() {
 				return
 			}
 
+			var err error
 			if rf.nextIdx[peerIdx] <= rf.lastIncludedIndex {
-				rf.leaderSendSnapshot(peerIdx)
+				err = rf.leaderSendSnapshot(peerIdx)
 			} else {
-				rf.leaderSendEntries(peerIdx)
+				err = rf.leaderSendEntries(peerIdx)
+			}
+
+			if err != nil {
+				rf.logger.Info("failed to send gRPC call", slog.Int("peer_id", peerIdx), logger.ErrAttr(err))
 			}
 		}(i)
 	}
