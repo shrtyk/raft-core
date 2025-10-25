@@ -9,13 +9,20 @@ import (
 
 const votedForNone = -1
 
+const defaultHttpMonitoringAddr = "localhost:12321"
+
 func DefaultConfig() *api.RaftConfig {
 	return &api.RaftConfig{
-		Env:                        logger.Dev,
-		ElectionTimeoutBase:        300 * time.Millisecond,
-		ElectionTimeoutRandomDelta: 300 * time.Millisecond,
-		HeartbeatTimeout:           70 * time.Millisecond,
-		ShutdownTimeout:            3 * time.Second,
-		RPCTimeout:                 100 * time.Millisecond,
+		Log: api.LoggerCfg{
+			Env: logger.Dev,
+		},
+		Timings: api.RaftTimings{
+			ElectionTimeoutBase:        300 * time.Millisecond,
+			ElectionTimeoutRandomDelta: 300 * time.Millisecond,
+			HeartbeatTimeout:           70 * time.Millisecond,
+			ShutdownTimeout:            3 * time.Second,
+			RPCTimeout:                 100 * time.Millisecond,
+		},
+		HttpMonitoringAddr: defaultHttpMonitoringAddr,
 	}
 }

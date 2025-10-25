@@ -97,17 +97,17 @@ func (h *statusHandler) getStatus() status {
 
 // startMonitoringServer starts the HTTP server for monitoring.
 func (rf *Raft) startMonitoringServer() {
-	if rf.cfg.MonitoringAddr == "" {
+	if rf.cfg.HttpMonitoringAddr == "" {
 		return
 	}
 
-	rf.logger.Info("starting monitoring server", "addr", rf.cfg.MonitoringAddr)
+	rf.logger.Info("starting monitoring server", "addr", rf.cfg.HttpMonitoringAddr)
 
 	mux := http.NewServeMux()
 	mux.Handle("/status", &statusHandler{rf: rf})
 
 	rf.monitoringServer = &http.Server{
-		Addr:    rf.cfg.MonitoringAddr,
+		Addr:    rf.cfg.HttpMonitoringAddr,
 		Handler: mux,
 	}
 

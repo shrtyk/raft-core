@@ -7,11 +7,19 @@ import (
 )
 
 type RaftConfig struct {
-	Env                        logger.Enviroment
+	Log                LoggerCfg
+	Timings            RaftTimings
+	HttpMonitoringAddr string
+}
+
+type LoggerCfg struct {
+	Env logger.Enviroment
+}
+
+type RaftTimings struct {
 	ElectionTimeoutBase        time.Duration
 	ElectionTimeoutRandomDelta time.Duration
 	HeartbeatTimeout           time.Duration
 	RPCTimeout                 time.Duration
 	ShutdownTimeout            time.Duration
-	MonitoringAddr             string
 }

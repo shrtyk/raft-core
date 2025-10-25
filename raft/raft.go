@@ -16,18 +16,19 @@ import (
 	raftpb "github.com/shrtyk/raft-core/internal/proto/gen"
 	"github.com/shrtyk/raft-core/pkg/logger"
 	"github.com/shrtyk/raft-core/pkg/storage"
+	"github.com/shrtyk/raft-core/pkg/transport"
 	"google.golang.org/grpc"
 )
 
 // A Go object implementing a single Raft peer.
 type Raft struct {
 	wg         sync.WaitGroup
-	mu         sync.RWMutex // Lock to protect shared access to this peer's state
-	peersCount int
-	transport  api.Transport
+	mu         sync.RWMutex  // Lock to protect shared access to this peer's state
+	peersCount int           // Amount of peers in cluster
+	transport  api.Transport // RPC clients layer abstraction
 	persister  api.Persister // Object to hold this peer's persisted state (should be concurrent safe)
-	me         int           // this peer's index into peers[]
-	dead       int32         // set by Shutdown()
+	me         int           // this peer's index
+	dead       int32         // set by Stop()
 
 	state State
 	cfg   *api.RaftConfig
@@ -114,7 +115,7 @@ func (rf *Raft) Submit(command []byte) (int64, int64, bool) {
 
 // Stop sets the peer to a dead state and stops completely
 func (rf *Raft) Stop() error {
-	tctx, tcancel := context.WithTimeout(rf.raftCtx, rf.cfg.ShutdownTimeout)
+	tctx, tcancel := context.WithTimeout(rf.raftCtx, rf.cfg.Timings.ShutdownTimeout)
 	defer tcancel()
 
 	var err error
@@ -148,7 +149,7 @@ func Make(
 	}
 
 	rf.cfg = cfg
-	rf.logger = logger.NewLogger(rf.cfg.Env)
+	rf.logger = logger.NewLogger(rf.cfg.Log.Env)
 
 	if persister == nil {
 		s, err := storage.NewDefaultStorage("data", rf.logger)
@@ -164,7 +165,7 @@ func Make(
 	rf.log = make([]*raftpb.LogEntry, 0)
 
 	rf.electionTimer = time.NewTimer(rf.randElectionInterval())
-	rf.heartbeatTicker = time.NewTicker(rf.cfg.HeartbeatTimeout)
+	rf.heartbeatTicker = time.NewTicker(rf.cfg.Timings.HeartbeatTimeout)
 	rf.heartbeatTicker.Stop()
 	rf.becomeFollower(-1)
 
@@ -196,7 +197,7 @@ func Make(
 		}
 	}()
 
-	tr, err := NewGRPCTransport(cfg.RPCTimeout, peerAddrs)
+	tr, err := transport.NewGRPCTransport(cfg.Timings.RPCTimeout, peerAddrs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create transport: %w", err)
 	}
