@@ -35,7 +35,6 @@ func (rf *Raft) startElection() {
 		go func(idx int) {
 			reply, err := rf.transport.SendRequestVote(rf.raftCtx, idx, args)
 			if err != nil {
-				// TODO: better handling
 				rf.logger.Warn("failed to get vote response from peer", "peer_id", idx, logger.ErrAttr(err))
 				return
 			}
@@ -50,9 +49,12 @@ func (rf *Raft) countVotes(timeout time.Duration, repliesChan <-chan *raftpb.Req
 	votes := make([]bool, rf.peersCount)
 	votes[rf.me] = true
 
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
 	for {
 		select {
-		case <-time.After(timeout):
+		case <-timer.C:
 			return
 		case reply := <-repliesChan:
 			rf.mu.Lock()

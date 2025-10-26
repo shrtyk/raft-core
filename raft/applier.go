@@ -30,7 +30,6 @@ func (rf *Raft) applier() {
 
 					snapshot, err := rf.persister.ReadSnapshot()
 					if err != nil {
-						// TODO: better handling
 						rf.logger.Warn("failed to read snapshot", logger.ErrAttr(err))
 						continue
 					}
