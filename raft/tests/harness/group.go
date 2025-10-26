@@ -142,6 +142,8 @@ func (sg *ServerGrp) ConnectOne(i int) {
 }
 
 func (sg *ServerGrp) cleanup() {
+	sg.mu.Lock()
+	defer sg.mu.Unlock()
 	for _, s := range sg.srvs {
 		if s.svcs != nil {
 			for _, svc := range s.svcs {
@@ -235,8 +237,10 @@ func (sg *ServerGrp) SnapshotSize() int {
 
 // If restart servers, first call shutdownserver
 func (sg *ServerGrp) StartServer(i int) {
+	sg.mu.Lock()
 	srv := sg.srvs[i].startServer(sg.gid)
 	sg.srvs[i] = srv
+	sg.mu.Unlock()
 
 	srv.svcs = sg.mks(srv.clntEnds, sg.gid, i, srv.saved)
 	simsrv := simrpc.MakeServer()
@@ -266,6 +270,8 @@ func (sg *ServerGrp) ShutdownServer(i int) {
 	// the result in the superseded Persister.
 	sg.net.DeleteServer(ServerName(sg.gid, i))
 
+	sg.mu.Lock()
+	defer sg.mu.Unlock()
 	sg.srvs[i].shutdownServer()
 }
 
