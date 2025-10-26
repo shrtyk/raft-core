@@ -1,14 +1,62 @@
 package raft
 
 import (
+	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strconv"
 
 	"github.com/shrtyk/raft-core/pkg/logger"
 )
 
-// status represents the raft node's status.
+// MonitoringServer defines the interface for the HTTP monitoring server.
+type MonitoringServer interface {
+	Start() error
+	Stop(ctx context.Context) error
+}
+
+// httpMonitoringServer implements the MonitoringServer interface.
+type httpMonitoringServer struct {
+	rf     *Raft
+	server *http.Server
+}
+
+// NewMonitoringServer creates a new HTTP monitoring server.
+func NewMonitoringServer(rf *Raft) MonitoringServer {
+	mux := http.NewServeMux()
+	mux.Handle("/status", &statusHandler{rf: rf})
+
+	return &httpMonitoringServer{
+		rf: rf,
+		server: &http.Server{
+			Addr:    rf.cfg.HttpMonitoringAddr,
+			Handler: mux,
+		},
+	}
+}
+
+// Start starts the HTTP server.
+func (s *httpMonitoringServer) Start() error {
+	s.rf.logger.Info("starting monitoring server", slog.String("addr", s.rf.cfg.HttpMonitoringAddr))
+
+	s.rf.wg.Go(func() {
+		if err := s.server.ListenAndServe(); err != http.ErrServerClosed {
+			s.rf.logger.Error("monitoring server failed", logger.ErrAttr(err))
+		}
+	})
+
+	return nil
+}
+
+// Stop gracefully stops the HTTP server.
+func (s *httpMonitoringServer) Stop(ctx context.Context) error {
+	if s.server != nil {
+		return s.server.Shutdown(ctx)
+	}
+	return nil
+}
+
 type status struct {
 	NodeID      int    `json:"nodeId"`
 	State       string `json:"state"`
@@ -40,7 +88,6 @@ type peerReplicationInfo struct {
 	NextIndex  int64 `json:"nextIndex"`
 }
 
-// statusHandler implements the http.Handler interface.
 type statusHandler struct {
 	rf *Raft
 }
@@ -93,28 +140,4 @@ func (h *statusHandler) getStatus() status {
 	}
 
 	return s
-}
-
-// startMonitoringServer starts the HTTP server for monitoring.
-func (rf *Raft) startMonitoringServer() {
-	if rf.cfg.HttpMonitoringAddr == "" {
-		return
-	}
-
-	rf.logger.Info("starting monitoring server", "addr", rf.cfg.HttpMonitoringAddr)
-
-	mux := http.NewServeMux()
-	mux.Handle("/status", &statusHandler{rf: rf})
-
-	rf.monitoringServer = &http.Server{
-		Addr:    rf.cfg.HttpMonitoringAddr,
-		Handler: mux,
-	}
-
-	rf.wg.Go(func() {
-		defer rf.wg.Done()
-		if err := rf.monitoringServer.ListenAndServe(); err != http.ErrServerClosed {
-			rf.logger.Error("monitoring server failed", logger.ErrAttr(err))
-		}
-	})
 }

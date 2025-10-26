@@ -5,9 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net"
-	"net/http"
-	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -17,7 +14,6 @@ import (
 	"github.com/shrtyk/raft-core/pkg/logger"
 	"github.com/shrtyk/raft-core/pkg/storage"
 	"github.com/shrtyk/raft-core/pkg/transport"
-	"google.golang.org/grpc"
 )
 
 // A Go object implementing a single Raft peer.
@@ -67,12 +63,12 @@ type Raft struct {
 	// the term of the last entry in the log that the snapshot replaces
 	lastIncludedTerm int64
 
-	raftCtx          context.Context
-	raftCancel       func()
-	logger           *slog.Logger
-	grpcServer       *grpc.Server
-	monitoringServer *http.Server
+	raftCtx    context.Context
+	raftCancel func()
+	logger     *slog.Logger
 
+	monitoringServer MonitoringServer
+	grpcServer       GRPCServer
 	raftpb.UnimplementedRaftServiceServer
 }
 
@@ -120,15 +116,15 @@ func (rf *Raft) Stop() error {
 
 	var err error
 	atomic.StoreInt32(&rf.dead, 1)
-	rf.grpcServer.GracefulStop()
-
-	if rf.monitoringServer != nil {
-		if shutdownErr := rf.monitoringServer.Shutdown(tctx); shutdownErr != nil {
-			err = errors.Join(err, fmt.Errorf("failed to shutdown monitoring server: %w", shutdownErr))
-		}
+	if serr := rf.grpcServer.Stop(); serr != nil {
+		err = errors.Join(err, fmt.Errorf("failed to shutdown gRPC server: %w", serr))
 	}
 
-	err = rf.transport.Close()
+	if serr := rf.monitoringServer.Stop(tctx); serr != nil {
+		err = errors.Join(err, fmt.Errorf("failed to shutdown monitoring server: %w", serr))
+	}
+
+	err = errors.Join(err, rf.transport.Close())
 	rf.raftCancel()
 	rf.wg.Wait()
 	return err
@@ -139,10 +135,17 @@ func Make(
 	cfg *api.RaftConfig, peerAddrs []string, me int,
 	persister api.Persister, applyCh chan *api.ApplyMessage,
 ) (api.Raft, error) {
-	rf := &Raft{}
-	rf.peersCount = len(peerAddrs)
-	rf.me = me
-	rf.applyChan = applyCh
+	rf := &Raft{
+		peersCount:        len(peerAddrs),
+		me:                me,
+		applyChan:         applyCh,
+		signalApplierChan: make(chan struct{}, 1),
+		log:               make([]*raftpb.LogEntry, 0),
+		nextIdx:           make([]int64, len(peerAddrs)),
+		matchIdx:          make([]int64, len(peerAddrs)),
+	}
+
+	rf.raftCtx, rf.raftCancel = context.WithCancel(context.Background())
 
 	if cfg == nil {
 		cfg = DefaultConfig()
@@ -158,12 +161,8 @@ func Make(
 		}
 		persister = s
 	}
+
 	rf.persister = persister
-
-	rf.raftCtx, rf.raftCancel = context.WithCancel(context.Background())
-	rf.signalApplierChan = make(chan struct{}, 1)
-	rf.log = make([]*raftpb.LogEntry, 0)
-
 	rf.electionTimer = time.NewTimer(rf.randElectionInterval())
 	rf.heartbeatTicker = time.NewTicker(rf.cfg.Timings.HeartbeatTimeout)
 	rf.heartbeatTicker.Stop()
@@ -176,26 +175,14 @@ func Make(
 	rf.restoreState(state)
 
 	lastLogIdx, _ := rf.lastLogIdxAndTerm()
-	rf.nextIdx = make([]int64, len(peerAddrs))
 	for i := range rf.nextIdx {
 		rf.nextIdx[i] = lastLogIdx + 1
 	}
-	rf.matchIdx = make([]int64, len(peerAddrs))
 
-	rf.grpcServer = grpc.NewServer()
-	raftpb.RegisterRaftServiceServer(rf.grpcServer, rf)
-
-	l, err := net.Listen("tcp", peerAddrs[me])
-	if err != nil {
-		return nil, fmt.Errorf("failed to listen: %v", err)
+	rf.grpcServer = NewGRPCServer(rf, peerAddrs[me])
+	if err := rf.grpcServer.Start(); err != nil {
+		return nil, fmt.Errorf("failed to start gRPC server: %w", err)
 	}
-
-	go func() {
-		if err := rf.grpcServer.Serve(l); err != nil {
-			rf.logger.Error("failed to serve", logger.ErrAttr(err))
-			os.Exit(1)
-		}
-	}()
 
 	tr, err := transport.NewGRPCTransport(cfg.Timings.RPCTimeout, peerAddrs)
 	if err != nil {
@@ -203,10 +190,13 @@ func Make(
 	}
 	rf.transport = tr
 
-	rf.wg.Add(2)
-	go rf.applier()
-	go rf.ticker()
-	rf.startMonitoringServer()
+	rf.monitoringServer = NewMonitoringServer(rf)
+	if err := rf.monitoringServer.Start(); err != nil {
+		return nil, fmt.Errorf("failed to start monitoring HTTP server: %w", err)
+	}
+
+	rf.wg.Go(rf.applier)
+	rf.wg.Go(rf.ticker)
 
 	return rf, nil
 }
