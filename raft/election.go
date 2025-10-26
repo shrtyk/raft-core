@@ -17,13 +17,13 @@ func (rf *Raft) startElection() {
 	rf.votedFor = int64(rf.me)
 	rf.resetElectionTimer()
 	lastLogIdx, lastLogTerm := rf.lastLogIdxAndTerm()
-	currentTerm := rf.curTerm
+	electionTerm := rf.curTerm
 
 	rf.persistAndUnlock(nil)
 
 	repliesChan := make(chan *raftpb.RequestVoteResponse, rf.peersCount-1)
 	args := &raftpb.RequestVoteRequest{
-		Term:         currentTerm,
+		Term:         electionTerm,
 		CandidateId:  int64(rf.me),
 		LastLogIndex: lastLogIdx,
 		LastLogTerm:  lastLogTerm,
@@ -42,10 +42,10 @@ func (rf *Raft) startElection() {
 		}(i)
 	}
 
-	rf.countVotes(timeout, repliesChan)
+	rf.countVotes(timeout, repliesChan, electionTerm)
 }
 
-func (rf *Raft) countVotes(timeout time.Duration, repliesChan <-chan *raftpb.RequestVoteResponse) {
+func (rf *Raft) countVotes(timeout time.Duration, repliesChan <-chan *raftpb.RequestVoteResponse, electionTerm int64) {
 	votes := make([]bool, rf.peersCount)
 	votes[rf.me] = true
 
@@ -55,15 +55,24 @@ func (rf *Raft) countVotes(timeout time.Duration, repliesChan <-chan *raftpb.Req
 	for {
 		select {
 		case <-timer.C:
+			rf.logger.Debug("election timed out")
 			return
 		case reply := <-repliesChan:
 			rf.mu.Lock()
+			rf.logger.Debug("received vote reply", "voter", reply.VoterId, "granted", reply.VoteGranted, "term", reply.Term)
 			if reply.Term > rf.curTerm {
 				rf.becomeFollower(reply.Term)
 				rf.resetElectionTimer()
 				rf.mu.Unlock()
 				return
-			} else if reply.VoteGranted && rf.isState(candidate) {
+			}
+
+			if rf.curTerm != electionTerm {
+				rf.mu.Unlock()
+				return
+			}
+
+			if reply.VoteGranted && rf.isState(candidate) {
 				rf.logger.Debug("vote granted", "voter_id", reply.VoterId)
 				votes[reply.VoterId] = true
 				if rf.isEnoughVotes(votes) {

@@ -289,26 +289,30 @@ func churn(t *testing.T, unreliable bool) {
 
 	// create a thread to periodically start and stop servers
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for atomic.LoadInt32(&stop) == 0 {
 			i := rand.Int() % servers
 			if (rand.Int() % 1000) < 200 {
 				// crash
-				if !ts.srvs[i].raft.Killed() {
+				ts.mu.Lock()
+				s := ts.srvs[i]
+				ts.mu.Unlock()
+				if s != nil && !s.raft.Killed() {
 					ts.g.ShutdownServer(i)
 				}
 			} else {
 				// start
-				if ts.srvs[i].raft.Killed() {
+				ts.mu.Lock()
+				s := ts.srvs[i]
+				ts.mu.Unlock()
+				if s != nil && s.raft.Killed() {
 					ts.g.StartServer(i)
 					ts.g.ConnectOne(i)
 				}
 			}
 			time.Sleep(time.Duration(rand.Int63()%20) * time.Millisecond)
 		}
-	}()
+	})
 
 	const n = 30
 	for iters := 0; iters < n; iters++ {

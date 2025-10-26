@@ -20,7 +20,7 @@ const (
 )
 
 // NewLogger creates new slog.Logger and return pointer to it
-func NewLogger(env Enviroment) *slog.Logger {
+func NewLogger(env Enviroment, addSource bool) *slog.Logger {
 	var level slog.Level
 
 	switch env {
@@ -31,7 +31,7 @@ func NewLogger(env Enviroment) *slog.Logger {
 	}
 
 	h := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		AddSource: true,
+		AddSource: addSource,
 		Level:     level,
 	})
 	return slog.New(h)

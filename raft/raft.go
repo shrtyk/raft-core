@@ -192,8 +192,9 @@ func NewRaft(
 	if cfg.Log.Env == logger.Dev {
 		_, rf.logger = logger.NewTestLogger()
 	} else {
-		rf.logger = logger.NewLogger(rf.cfg.Log.Env)
+		rf.logger = logger.NewLogger(rf.cfg.Log.Env, false)
 	}
+	rf.logger = rf.logger.With(slog.Int("me", me))
 
 	if persister == nil {
 		s, err := storage.NewDefaultStorage("data", rf.logger)

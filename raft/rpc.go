@@ -36,11 +36,14 @@ func (rf *Raft) RequestVote(ctx context.Context,
 
 	reply.Term = rf.curTerm
 	if !rf.isCandidateLogUpToDate(req.LastLogIndex, req.LastLogTerm) {
+		myLastLogIdx, myLastLogTerm := rf.lastLogIdxAndTerm()
 		rf.logger.Warn(
 			"denying vote, candidate log not up-to-date",
 			"candidate_id", req.CandidateId,
 			"candidate_last_log_idx", req.LastLogIndex,
 			"candidate_last_log_term", req.LastLogTerm,
+			"my_last_log_idx", myLastLogIdx,
+			"my_last_log_term", myLastLogTerm,
 		)
 		return
 	}
@@ -106,10 +109,12 @@ func (rf *Raft) AppendEntries(ctx context.Context,
 	}
 
 	if !rf.isLogConsistent(req.PrevLogIndex, req.PrevLogTerm) {
+		myPrevLogTerm := rf.getTerm(req.PrevLogIndex)
 		rf.logger.Warn(
 			"log inconsistent, rejecting append entries",
 			"prev_log_idx", req.PrevLogIndex,
 			"prev_log_term", req.PrevLogTerm,
+			"my_prev_log_term", myPrevLogTerm,
 		)
 		rf.fillConflictReply(req, reply)
 		return

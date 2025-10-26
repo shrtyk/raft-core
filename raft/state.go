@@ -54,7 +54,7 @@ func (rf *Raft) becomeFollower(term int64) (needToPersist bool) {
 //
 // Assumes the lock is held when called
 func (rf *Raft) becomeLeader() {
-	rf.logger.Info("transitioning to leader", "term", rf.curTerm)
+	rf.logger.Info("transitioning to leader", "from_state", stateToString(rf.state), "term", rf.curTerm)
 	atomic.StoreUint32(&rf.state, leader)
 	rf.resetHeartbeatTicker()
 
