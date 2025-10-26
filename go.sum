@@ -1,3 +1,5 @@
+github.com/anishathalye/porcupine v1.0.3 h1:0V+ZTHPjWUhYhiVaksoBFKfmBvoJrM3BXLQKGqPqiHM=
+github.com/anishathalye/porcupine v1.0.3/go.mod h1:WM0SsFjWNl2Y4BqHr/E/ll2yY1GY1jqn+W7Z/84Zoog=
 github.com/go-logr/logr v1.4.3 h1:CjnDlHq8ikf6E492q6eKboGOC0T8CDaOvkHCIg8idEI=
 github.com/go-logr/logr v1.4.3/go.mod h1:9T104GzyrTigFIr8wt5mBrctHMim0Nb2HLGrmQ40KvY=
 github.com/go-logr/stdr v1.2.2 h1:hSWxHoqTgW2S2qGc0LTAI563KZ5YKYRhT3MFKZMbjag=

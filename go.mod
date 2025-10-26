@@ -3,6 +3,7 @@ module github.com/shrtyk/raft-core
 go 1.25.0
 
 require (
+	github.com/anishathalye/porcupine v1.0.3
 	google.golang.org/grpc v1.76.0
 	google.golang.org/protobuf v1.36.10
 )
