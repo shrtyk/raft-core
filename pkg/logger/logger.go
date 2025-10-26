@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"bytes"
 	"log/slog"
 	"os"
 )
@@ -34,6 +35,12 @@ func NewLogger(env Enviroment) *slog.Logger {
 		Level:     level,
 	})
 	return slog.New(h)
+}
+
+func NewTestLogger() (*bytes.Buffer, *slog.Logger) {
+	b := &bytes.Buffer{}
+	l := slog.New(slog.NewTextHandler(b, &slog.HandlerOptions{AddSource: false}))
+	return b, l
 }
 
 func ErrAttr(err error) slog.Attr {

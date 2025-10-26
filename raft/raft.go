@@ -13,7 +13,6 @@ import (
 	raftpb "github.com/shrtyk/raft-core/internal/proto/gen"
 	"github.com/shrtyk/raft-core/pkg/logger"
 	"github.com/shrtyk/raft-core/pkg/storage"
-	"github.com/shrtyk/raft-core/pkg/transport"
 )
 
 // A Go object implementing a single Raft peer.
@@ -109,6 +108,11 @@ func (rf *Raft) Submit(command []byte) (int64, int64, bool) {
 	return lastLogIdx, term, isLeader
 }
 
+// Killed returns true if the server has been killed.
+func (rf *Raft) Killed() bool {
+	return atomic.LoadInt32(&rf.dead) == 1
+}
+
 // Stop sets the peer to a dead state and stops completely
 func (rf *Raft) Stop() error {
 	tctx, tcancel := context.WithTimeout(rf.raftCtx, rf.cfg.Timings.ShutdownTimeout)
@@ -116,12 +120,16 @@ func (rf *Raft) Stop() error {
 
 	var err error
 	atomic.StoreInt32(&rf.dead, 1)
-	if serr := rf.grpcServer.Stop(); serr != nil {
-		err = errors.Join(err, fmt.Errorf("failed to shutdown gRPC server: %w", serr))
+	if rf.grpcServer != nil {
+		if serr := rf.grpcServer.Stop(); serr != nil {
+			err = errors.Join(err, fmt.Errorf("failed to shutdown gRPC server: %w", serr))
+		}
 	}
 
-	if serr := rf.monitoringServer.Stop(tctx); serr != nil {
-		err = errors.Join(err, fmt.Errorf("failed to shutdown monitoring server: %w", serr))
+	if rf.monitoringServer != nil {
+		if serr := rf.monitoringServer.Stop(tctx); serr != nil {
+			err = errors.Join(err, fmt.Errorf("failed to shutdown monitoring server: %w", serr))
+		}
 	}
 
 	err = errors.Join(err, rf.transport.Close())
@@ -136,33 +144,42 @@ func (rf *Raft) Start() error {
 	rf.heartbeatTicker.Stop()
 	rf.becomeFollower(-1)
 
-	if err := rf.grpcServer.Start(); err != nil {
-		return fmt.Errorf("failed to start gRPC server: %w", err)
+	if rf.grpcServer != nil {
+		if err := rf.grpcServer.Start(); err != nil {
+			return fmt.Errorf("failed to start gRPC server: %w", err)
+		}
 	}
 
-	if err := rf.monitoringServer.Start(); err != nil {
-		return fmt.Errorf("failed to start monitoring HTTP server: %w", err)
+	if rf.monitoringServer != nil {
+		if err := rf.monitoringServer.Start(); err != nil {
+			return fmt.Errorf("failed to start monitoring HTTP server: %w", err)
+		}
 	}
 
-	rf.wg.Go(rf.applier)
-	rf.wg.Go(rf.ticker)
+	rf.wg.Add(2)
+	go rf.applier()
+	go rf.ticker()
 
 	return nil
 }
 
 // NewRaft creates a new Raft peer
 func NewRaft(
-	cfg *api.RaftConfig, peerAddrs []string, me int,
-	persister api.Persister, applyCh chan *api.ApplyMessage,
+	cfg *api.RaftConfig,
+	me int,
+	persister api.Persister,
+	applyCh chan *api.ApplyMessage,
+	transport api.Transport,
 ) (api.Raft, error) {
 	rf := &Raft{
-		peersCount:        len(peerAddrs),
+		peersCount:        transport.PeersCount(),
+		transport:         transport,
 		me:                me,
 		applyChan:         applyCh,
 		signalApplierChan: make(chan struct{}, 1),
 		log:               make([]*raftpb.LogEntry, 0),
-		nextIdx:           make([]int64, len(peerAddrs)),
-		matchIdx:          make([]int64, len(peerAddrs)),
+		nextIdx:           make([]int64, transport.PeersCount()),
+		matchIdx:          make([]int64, transport.PeersCount()),
 	}
 
 	rf.raftCtx, rf.raftCancel = context.WithCancel(context.Background())
@@ -172,7 +189,11 @@ func NewRaft(
 	}
 
 	rf.cfg = cfg
-	rf.logger = logger.NewLogger(rf.cfg.Log.Env)
+	if cfg.Log.Env == logger.Dev {
+		_, rf.logger = logger.NewTestLogger()
+	} else {
+		rf.logger = logger.NewLogger(rf.cfg.Log.Env)
+	}
 
 	if persister == nil {
 		s, err := storage.NewDefaultStorage("data", rf.logger)
@@ -194,16 +215,6 @@ func NewRaft(
 	for i := range rf.nextIdx {
 		rf.nextIdx[i] = lastLogIdx + 1
 	}
-
-	rf.grpcServer = NewGRPCServer(rf, peerAddrs[me])
-
-	tr, err := transport.NewGRPCTransport(cfg.Timings.RPCTimeout, peerAddrs)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create transport: %w", err)
-	}
-	rf.transport = tr
-
-	rf.monitoringServer = NewMonitoringServer(rf)
 
 	return rf, nil
 }

@@ -64,6 +64,10 @@ func (t *GRPCTransport) SendInstallSnapshot(
 	return t.clients[to].InstallSnapshot(tctx, req)
 }
 
+func (t *GRPCTransport) PeersCount() int {
+	return len(t.clients)
+}
+
 func (t *GRPCTransport) Close() error {
 	var err error
 	for i, conn := range t.conns {

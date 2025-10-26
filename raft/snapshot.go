@@ -36,8 +36,7 @@ func (rf *Raft) Snapshot(index int64, snapshot []byte) error {
 func (rf *Raft) leaderSendSnapshot(peerIdx int) error {
 	snapshot, err := rf.persister.ReadSnapshot()
 	if err != nil {
-		// TODO: better handling
-		return fmt.Errorf("failed to read snapshot: %v", err)
+		return fmt.Errorf("failed to read snapshot: %w", err)
 	}
 
 	req := &raftpb.InstallSnapshotRequest{
