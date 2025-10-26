@@ -130,8 +130,23 @@ func (rf *Raft) Stop() error {
 	return err
 }
 
-// Make creates and starts a new Raft peer
-func Make(
+func (rf *Raft) Start() error {
+	if err := rf.grpcServer.Start(); err != nil {
+		return fmt.Errorf("failed to start gRPC server: %w", err)
+	}
+
+	if err := rf.monitoringServer.Start(); err != nil {
+		return fmt.Errorf("failed to start monitoring HTTP server: %w", err)
+	}
+
+	rf.wg.Go(rf.applier)
+	rf.wg.Go(rf.ticker)
+
+	return nil
+}
+
+// NewRaft creates a new Raft peer
+func NewRaft(
 	cfg *api.RaftConfig, peerAddrs []string, me int,
 	persister api.Persister, applyCh chan *api.ApplyMessage,
 ) (api.Raft, error) {
@@ -180,9 +195,6 @@ func Make(
 	}
 
 	rf.grpcServer = NewGRPCServer(rf, peerAddrs[me])
-	if err := rf.grpcServer.Start(); err != nil {
-		return nil, fmt.Errorf("failed to start gRPC server: %w", err)
-	}
 
 	tr, err := transport.NewGRPCTransport(cfg.Timings.RPCTimeout, peerAddrs)
 	if err != nil {
@@ -191,12 +203,6 @@ func Make(
 	rf.transport = tr
 
 	rf.monitoringServer = NewMonitoringServer(rf)
-	if err := rf.monitoringServer.Start(); err != nil {
-		return nil, fmt.Errorf("failed to start monitoring HTTP server: %w", err)
-	}
-
-	rf.wg.Go(rf.applier)
-	rf.wg.Go(rf.ticker)
 
 	return rf, nil
 }

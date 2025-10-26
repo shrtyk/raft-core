@@ -36,6 +36,10 @@ type Raft interface {
 	// Typically used by tests.
 	PersistedStateSize() (int, error)
 
+	// Start starts all background processes of the Raft peer.
+	// It should be called after the Raft instance is created.
+	Start() error
+
 	// Stop gracefully terminates the Raft instance, closing all background
 	// goroutines and network connections.
 	Stop() error
