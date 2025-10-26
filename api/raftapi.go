@@ -43,6 +43,10 @@ type Raft interface {
 	// Stop gracefully terminates the Raft instance, closing all background
 	// goroutines and network connections.
 	Stop() error
+
+	// Killed returns true if peers has been stoped.
+	// Typically used by tests.
+	Killed() bool
 }
 
 type ApplyMessage struct {
