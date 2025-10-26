@@ -131,6 +131,11 @@ func (rf *Raft) Stop() error {
 }
 
 func (rf *Raft) Start() error {
+	rf.electionTimer = time.NewTimer(rf.randElectionInterval())
+	rf.heartbeatTicker = time.NewTicker(rf.cfg.Timings.HeartbeatTimeout)
+	rf.heartbeatTicker.Stop()
+	rf.becomeFollower(-1)
+
 	if err := rf.grpcServer.Start(); err != nil {
 		return fmt.Errorf("failed to start gRPC server: %w", err)
 	}
@@ -178,10 +183,6 @@ func NewRaft(
 	}
 
 	rf.persister = persister
-	rf.electionTimer = time.NewTimer(rf.randElectionInterval())
-	rf.heartbeatTicker = time.NewTicker(rf.cfg.Timings.HeartbeatTimeout)
-	rf.heartbeatTicker.Stop()
-	rf.becomeFollower(-1)
 
 	state, err := persister.ReadRaftState()
 	if err != nil {
