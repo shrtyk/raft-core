@@ -7,7 +7,7 @@ import (
 	"github.com/shrtyk/raft-core/pkg/logger"
 )
 
-// startElection begins a new election
+// startElection begins the leader election process for a new term
 func (rf *Raft) startElection() {
 	timeout := rf.randElectionInterval()
 
@@ -21,6 +21,7 @@ func (rf *Raft) startElection() {
 
 	rf.persistAndUnlock(nil)
 
+	// Buffered channel to collect replies without blocking
 	repliesChan := make(chan *raftpb.RequestVoteResponse, rf.peersCount-1)
 	args := &raftpb.RequestVoteRequest{
 		Term:         electionTerm,
@@ -28,6 +29,8 @@ func (rf *Raft) startElection() {
 		LastLogIndex: lastLogIdx,
 		LastLogTerm:  lastLogTerm,
 	}
+
+	// Send RequestVote RPCs in parallel to all peers
 	for i := range rf.peersCount {
 		if i == int(rf.me) {
 			continue
@@ -45,6 +48,8 @@ func (rf *Raft) startElection() {
 	rf.countVotes(timeout, repliesChan, electionTerm)
 }
 
+// countVotes collects RequestVote responses until timeout or majority is reached.
+// It steps down on higher-term replies or explicit rejections in the same term
 func (rf *Raft) countVotes(timeout time.Duration, repliesChan <-chan *raftpb.RequestVoteResponse, electionTerm int64) {
 	votes := make([]bool, rf.peersCount)
 	votes[rf.me] = true
@@ -60,18 +65,21 @@ func (rf *Raft) countVotes(timeout time.Duration, repliesChan <-chan *raftpb.Req
 		case reply := <-repliesChan:
 			rf.mu.Lock()
 			rf.logger.Debug("received vote reply", "voter", reply.VoterId, "granted", reply.VoteGranted, "term", reply.Term)
+
+			// Step down if reply term is newer
 			if reply.Term > rf.curTerm {
 				rf.becomeFollower(reply.Term)
-				rf.resetElectionTimer()
 				rf.mu.Unlock()
 				return
 			}
 
+			// Ignore outdated election responses
 			if rf.curTerm != electionTerm {
 				rf.mu.Unlock()
 				return
 			}
 
+			// Count granted votes only if still candidate
 			if reply.VoteGranted && rf.isState(candidate) {
 				rf.logger.Debug("vote granted", "voter_id", reply.VoterId)
 				votes[reply.VoterId] = true
@@ -81,6 +89,10 @@ func (rf *Raft) countVotes(timeout time.Duration, repliesChan <-chan *raftpb.Req
 					rf.sendSnapshotOrEntries()
 					return
 				}
+			} else if reply.Term == rf.curTerm { // downgrade to follower on explicit rejection
+				rf.becomeFollower(rf.curTerm)
+				rf.mu.Unlock()
+				return
 			}
 			rf.mu.Unlock()
 		}
