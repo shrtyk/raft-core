@@ -2,8 +2,6 @@ package harness
 
 import (
 	"sync"
-	"time"
-
 
 	"github.com/shrtyk/raft-core/raft/tests/simrpc"
 )
@@ -77,6 +75,13 @@ func (s *Server) shutdownServer() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	for _, svc := range s.svcs {
+		if svc != nil {
+			svc.Kill()
+		}
+	}
+	s.svcs = nil
+
 	// a fresh persister, in case old instance
 	// continues to update the Persister.
 	// but copy old persister's content so that we always
@@ -84,13 +89,4 @@ func (s *Server) shutdownServer() {
 	if s.saved != nil {
 		s.saved = s.saved.Copy()
 	}
-
-	// inform all services to stop
-	for _, svc := range s.svcs {
-		if svc != nil {
-			svc.Kill()
-		}
-	}
-	time.Sleep(20 * time.Millisecond)
-	s.svcs = nil
 }
