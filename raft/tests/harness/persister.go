@@ -31,8 +31,8 @@ func (ps *Persister) Copy() *Persister {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 	np := MakePersister()
-	np.raftstate = ps.raftstate
-	np.snapshot = ps.snapshot
+	np.raftstate = append([]byte(nil), ps.raftstate...)
+	np.snapshot = append([]byte(nil), ps.snapshot...)
 	return np
 }
 

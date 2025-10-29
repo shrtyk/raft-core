@@ -289,9 +289,11 @@ func churn(t *testing.T, unreliable bool) {
 
 	// create a thread to periodically start and stop servers
 	var wg sync.WaitGroup
+	serverLocks := make([]sync.Mutex, servers)
 	wg.Go(func() {
 		for atomic.LoadInt32(&stop) == 0 {
 			i := rand.Int() % servers
+			serverLocks[i].Lock()
 			if (rand.Int() % 1000) < 200 {
 				// crash
 				ts.mu.Lock()
@@ -310,6 +312,7 @@ func churn(t *testing.T, unreliable bool) {
 					ts.g.ConnectOne(i)
 				}
 			}
+			serverLocks[i].Unlock()
 			time.Sleep(time.Duration(rand.Int63()%20) * time.Millisecond)
 		}
 	})

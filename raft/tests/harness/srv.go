@@ -2,6 +2,8 @@ package harness
 
 import (
 	"sync"
+	"time"
+
 
 	"github.com/shrtyk/raft-core/raft/tests/simrpc"
 )
@@ -89,5 +91,6 @@ func (s *Server) shutdownServer() {
 			svc.Kill()
 		}
 	}
+	time.Sleep(20 * time.Millisecond)
 	s.svcs = nil
 }
