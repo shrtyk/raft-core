@@ -21,7 +21,7 @@ func DefaultConfig() *api.RaftConfig {
 			ElectionTimeoutRandomDelta: 300 * time.Millisecond,
 			HeartbeatTimeout:           70 * time.Millisecond,
 			ShutdownTimeout:            3 * time.Second,
-			RPCTimeout:                 100 * time.Millisecond,
+			RPCTimeout:                 70 * time.Millisecond,
 		},
 		HttpMonitoringAddr: defaultHttpMonitoringAddr,
 	}

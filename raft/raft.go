@@ -17,17 +17,24 @@ import (
 
 // A Go object implementing a single Raft peer.
 type Raft struct {
-	wg         sync.WaitGroup
-	mu         sync.RWMutex  // Lock to protect shared access to this peer's state
+	wg sync.WaitGroup
+	mu sync.RWMutex // Lock to protect shared access to this peer's state
+	// Lock for persistence writes to provide atomicity of operations without holding global lock.
+	//
+	// Lock mu -> update persistence state -> make a copy state -> lock pmu -> unlock mu -> persist copy of state -> unlock pmu
+	pmu        sync.RWMutex
 	peersCount int           // Amount of peers in cluster
 	transport  api.Transport // RPC clients layer abstraction
-	persister  api.Persister // Object to hold this peer's persisted state (should be concurrent safe)
+	persister  api.Persister // Persistence layer abstraction (should be concurrent safe)
 	me         int           // this peer's index
 	dead       int32         // set by Stop()
 
-	state State
-	cfg   *api.RaftConfig
+	state State           // State of the peer
+	cfg   *api.RaftConfig // Config of the peer
 
+	// Lock to provide atomic timers updates.
+	//
+	// lock timerMu -> stop one of the timers -> reser another one -> unlock timerMu
 	timerMu         sync.Mutex
 	electionTimer   *time.Timer
 	heartbeatTicker *time.Ticker

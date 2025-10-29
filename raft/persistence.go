@@ -31,6 +31,9 @@ func (rf *Raft) getPersistentStateBytes() []byte {
 // It must be called with rf.mu held, and it will unlock it
 func (rf *Raft) persistAndUnlock(snapshot []byte) error {
 	state := rf.getPersistentStateBytes()
+
+	rf.pmu.Lock()
+	defer rf.pmu.Unlock()
 	rf.mu.Unlock()
 
 	if snapshot == nil {

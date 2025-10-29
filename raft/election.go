@@ -49,7 +49,7 @@ func (rf *Raft) startElection() {
 }
 
 // countVotes collects RequestVote responses until timeout or majority is reached.
-// It steps down on higher-term replies or explicit rejections in the same term
+// It steps down on higher-term replies.
 func (rf *Raft) countVotes(timeout time.Duration, repliesChan <-chan *raftpb.RequestVoteResponse, electionTerm int64) {
 	votes := make([]bool, rf.peersCount)
 	votes[rf.me] = true
@@ -89,10 +89,6 @@ func (rf *Raft) countVotes(timeout time.Duration, repliesChan <-chan *raftpb.Req
 					rf.sendSnapshotOrEntries()
 					return
 				}
-			} else if reply.Term == rf.curTerm { // downgrade to follower on explicit rejection
-				rf.becomeFollower(rf.curTerm)
-				rf.mu.Unlock()
-				return
 			}
 			rf.mu.Unlock()
 		}

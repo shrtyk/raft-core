@@ -97,7 +97,7 @@ func (rf *Raft) AppendEntries(ctx context.Context,
 		return
 	}
 
-	if req.Term > rf.curTerm {
+	if req.Term > rf.curTerm || rf.isState(candidate) {
 		needToPersist = rf.becomeFollower(req.Term)
 	}
 
