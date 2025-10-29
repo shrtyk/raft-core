@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/shrtyk/raft-core/api"
@@ -48,7 +49,10 @@ func (rf *Raft) leaderSendSnapshot(peerIdx int) error {
 	}
 	rf.mu.RUnlock()
 
-	reply, err := rf.transport.SendInstallSnapshot(rf.raftCtx, peerIdx, req)
+	tctx, tcancel := context.WithTimeout(rf.raftCtx, rf.cfg.Timings.RPCTimeout)
+	defer tcancel()
+
+	reply, err := rf.transport.SendInstallSnapshot(tctx, peerIdx, req)
 	if err != nil {
 		return fmt.Errorf("failed to send InstallSnapshot to peer #%d: %v", peerIdx, err)
 	}

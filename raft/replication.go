@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"context"
 	"fmt"
 	"slices"
 
@@ -28,7 +29,10 @@ func (rf *Raft) leaderSendEntries(peerIdx int) error {
 	}
 	rf.mu.RUnlock()
 
-	reply, err := rf.transport.SendAppendEntries(rf.raftCtx, peerIdx, args)
+	tctx, tcancel := context.WithTimeout(rf.raftCtx, rf.cfg.Timings.RPCTimeout)
+	defer tcancel()
+
+	reply, err := rf.transport.SendAppendEntries(tctx, peerIdx, args)
 	if err != nil {
 		return fmt.Errorf("failed to send AppendEntries to peer #%d: %w", peerIdx, err)
 	}

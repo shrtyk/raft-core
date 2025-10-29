@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"context"
 	"time"
 
 	raftpb "github.com/shrtyk/raft-core/internal/proto/gen"
@@ -36,7 +37,10 @@ func (rf *Raft) startElection() {
 			continue
 		}
 		go func(idx int) {
-			reply, err := rf.transport.SendRequestVote(rf.raftCtx, idx, args)
+			tctx, tcancel := context.WithTimeout(rf.raftCtx, rf.cfg.Timings.RPCTimeout)
+			defer tcancel()
+
+			reply, err := rf.transport.SendRequestVote(tctx, idx, args)
 			if err != nil {
 				rf.logger.Warn("failed to get vote response from peer", "peer_id", idx, logger.ErrAttr(err))
 				return
