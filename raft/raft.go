@@ -93,13 +93,13 @@ func (rf *Raft) PersistedStateSize() (int, error) {
 func (rf *Raft) Submit(command []byte) (int64, int64, bool) {
 	rf.mu.Lock()
 
-	isLeader := rf.isState(leader)
-	term := rf.curTerm
-	if !isLeader {
+	if !rf.isState(leader) {
+		term := rf.curTerm
 		rf.mu.Unlock()
 		return -1, term, false
 	}
 
+	term := rf.curTerm
 	rf.log = append(rf.log, &raftpb.LogEntry{
 		Term: rf.curTerm,
 		Cmd:  command,
@@ -108,11 +108,21 @@ func (rf *Raft) Submit(command []byte) (int64, int64, bool) {
 	rf.matchIdx[rf.me] = lastLogIdx
 	rf.nextIdx[rf.me] = lastLogIdx + 1
 
-	rf.persistAndUnlock(nil)
+	// If persistence fails, the node must not continue as leader,
+	// because it’s no longer a reliable state machine replica.
+	if err := rf.persistAndUnlock(nil); err != nil {
+		rf.logger.Warn("failed to persist log, stepping down as leader", logger.ErrAttr(err))
+		rf.mu.Lock()
+		if rf.curTerm == term && rf.isState(leader) {
+			rf.becomeFollower(term)
+		}
+		rf.mu.Unlock()
+		return -1, term, false
+	}
 
 	go rf.sendSnapshotOrEntries()
 
-	return lastLogIdx, term, isLeader
+	return lastLogIdx, term, true
 }
 
 // Killed returns true if the server has been killed.
