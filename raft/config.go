@@ -17,12 +17,13 @@ func DefaultConfig() *api.RaftConfig {
 			Env: logger.Dev,
 		},
 		Timings: api.RaftTimings{
-			ElectionTimeoutBase:        300 * time.Millisecond,
-			ElectionTimeoutRandomDelta: 300 * time.Millisecond,
-			HeartbeatTimeout:           70 * time.Millisecond,
+			ElectionTimeoutBase:        150 * time.Millisecond,
+			ElectionTimeoutRandomDelta: 150 * time.Millisecond,
+			HeartbeatTimeout:           60 * time.Millisecond,
 			ShutdownTimeout:            3 * time.Second,
-			RPCTimeout:                 70 * time.Millisecond,
+			RPCTimeout:                 100 * time.Millisecond,
 		},
 		HttpMonitoringAddr: defaultHttpMonitoringAddr,
+		MessagesQueueSize:  256,
 	}
 }

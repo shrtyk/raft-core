@@ -39,8 +39,10 @@ type Raft struct {
 	electionTimer   *time.Timer
 	heartbeatTicker *time.Ticker
 
-	applyChan         chan *api.ApplyMessage
-	signalApplierChan chan struct{}
+	applyChan          chan *api.ApplyMessage
+	messagesChan       chan *api.ApplyMessage
+	signalMessagerChan chan struct{}
+	electionDone       chan struct{}
 
 	// Persistent state:
 
@@ -112,6 +114,7 @@ func (rf *Raft) Submit(command []byte) (int64, int64, bool) {
 	// because it’s no longer a reliable state machine replica.
 	if err := rf.persistAndUnlock(nil); err != nil {
 		rf.logger.Warn("failed to persist log, stepping down as leader", logger.ErrAttr(err))
+
 		rf.mu.Lock()
 		if rf.curTerm == term && rf.isState(leader) {
 			rf.becomeFollower(term)
@@ -179,9 +182,10 @@ func (rf *Raft) Start() error {
 		}
 	}
 
-	rf.wg.Add(2)
+	rf.wg.Add(3)
 	go rf.applier()
 	go rf.ticker()
+	go rf.messager()
 
 	return nil
 }
@@ -195,14 +199,14 @@ func NewRaft(
 	transport api.Transport,
 ) (api.Raft, error) {
 	rf := &Raft{
-		peersCount:        transport.PeersCount(),
-		transport:         transport,
-		me:                me,
-		applyChan:         applyCh,
-		signalApplierChan: make(chan struct{}, 1),
-		log:               make([]*raftpb.LogEntry, 0),
-		nextIdx:           make([]int64, transport.PeersCount()),
-		matchIdx:          make([]int64, transport.PeersCount()),
+		peersCount:         transport.PeersCount(),
+		transport:          transport,
+		me:                 me,
+		applyChan:          applyCh,
+		signalMessagerChan: make(chan struct{}, 1),
+		log:                make([]*raftpb.LogEntry, 0),
+		nextIdx:            make([]int64, transport.PeersCount()),
+		matchIdx:           make([]int64, transport.PeersCount()),
 	}
 
 	rf.raftCtx, rf.raftCancel = context.WithCancel(context.Background())
@@ -212,12 +216,12 @@ func NewRaft(
 	}
 
 	rf.cfg = cfg
+	rf.messagesChan = make(chan *api.ApplyMessage, rf.cfg.MessagesQueueSize)
 	if cfg.Log.Env == logger.Dev {
 		_, rf.logger = logger.NewTestLogger()
 	} else {
-		rf.logger = logger.NewLogger(rf.cfg.Log.Env, false)
+		rf.logger = logger.NewLogger(rf.cfg.Log.Env, false).With(slog.Int("me", me))
 	}
-	rf.logger = rf.logger.With(slog.Int("me", me))
 
 	if persister == nil {
 		s, err := storage.NewDefaultStorage("data", rf.logger)

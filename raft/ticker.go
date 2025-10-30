@@ -2,7 +2,6 @@ package raft
 
 import (
 	"math/rand"
-	"sync/atomic"
 	"time"
 )
 
@@ -19,11 +18,20 @@ func (rf *Raft) ticker() {
 		case <-rf.raftCtx.Done():
 			return
 		case <-rf.electionTimer.C:
+			rf.logger.Debug("election timer fired, attempting to start election")
 			rf.mu.Lock()
-			if !rf.isState(leader) {
-				atomic.StoreUint32(&rf.state, candidate)
-				go rf.startElection()
+			if rf.isState(leader) {
+				rf.mu.Unlock()
+				continue
 			}
+
+			if rf.electionDone != nil {
+				close(rf.electionDone)
+			}
+			rf.electionDone = make(chan struct{})
+
+			rf.resetElectionTimer()
+			go rf.startElection(rf.electionDone)
 			rf.mu.Unlock()
 		case <-rf.heartbeatTicker.C:
 			if rf.isState(leader) {

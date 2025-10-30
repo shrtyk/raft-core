@@ -2,21 +2,19 @@ package raft
 
 import (
 	"context"
-	"time"
+	"sync/atomic"
 
 	raftpb "github.com/shrtyk/raft-core/internal/proto/gen"
 	"github.com/shrtyk/raft-core/pkg/logger"
 )
 
 // startElection begins the leader election process for a new term
-func (rf *Raft) startElection() {
-	timeout := rf.randElectionInterval()
-
+func (rf *Raft) startElection(electionDone chan struct{}) {
 	rf.mu.Lock()
+	atomic.StoreUint32(&rf.state, candidate)
 	rf.curTerm++
 	rf.logger.Info("starting election", "term", rf.curTerm)
 	rf.votedFor = int64(rf.me)
-	rf.resetElectionTimer()
 	lastLogIdx, lastLogTerm := rf.lastLogIdxAndTerm()
 	electionTerm := rf.curTerm
 
@@ -49,22 +47,19 @@ func (rf *Raft) startElection() {
 		}(i)
 	}
 
-	rf.countVotes(timeout, repliesChan, electionTerm)
+	rf.countVotes(repliesChan, electionTerm, electionDone)
 }
 
 // countVotes collects RequestVote responses until timeout or majority is reached.
 // It steps down on higher-term replies.
-func (rf *Raft) countVotes(timeout time.Duration, repliesChan <-chan *raftpb.RequestVoteResponse, electionTerm int64) {
+func (rf *Raft) countVotes(repliesChan <-chan *raftpb.RequestVoteResponse, electionTerm int64, electionDone chan struct{}) {
 	votes := make([]bool, rf.peersCount)
 	votes[rf.me] = true
 
-	timer := time.NewTimer(timeout)
-	defer timer.Stop()
-
 	for {
 		select {
-		case <-timer.C:
-			rf.logger.Debug("election timed out")
+		case <-electionDone:
+			rf.logger.Debug("election cancelled")
 			return
 		case reply := <-repliesChan:
 			rf.mu.Lock()
