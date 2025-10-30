@@ -156,10 +156,16 @@ func (rf *Raft) Stop() error {
 }
 
 func (rf *Raft) Start() error {
+	state, err := rf.persister.ReadRaftState()
+	if err != nil {
+		return fmt.Errorf("failed to read peer #%d state: %w", rf.me, err)
+	}
+	rf.restoreState(state)
+
 	rf.electionTimer = time.NewTimer(rf.randElectionInterval())
 	rf.heartbeatTicker = time.NewTicker(rf.cfg.Timings.HeartbeatTimeout)
 	rf.heartbeatTicker.Stop()
-	rf.becomeFollower(-1)
+	rf.becomeFollower(rf.curTerm)
 
 	if rf.grpcServer != nil {
 		if err := rf.grpcServer.Start(); err != nil {
@@ -222,12 +228,6 @@ func NewRaft(
 	}
 
 	rf.persister = persister
-
-	state, err := persister.ReadRaftState()
-	if err != nil {
-		return nil, fmt.Errorf("failed to read peer #%d state: %w", me, err)
-	}
-	rf.restoreState(state)
 
 	lastLogIdx, _ := rf.lastLogIdxAndTerm()
 	for i := range rf.nextIdx {
