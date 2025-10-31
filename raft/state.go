@@ -72,15 +72,15 @@ func (rf *Raft) becomeLeader() {
 //
 // Assumes the lock is held when called.
 func (rf *Raft) checkOrUpdateTerm(rpcCallName string, peerIdx int, reqTerm, replyTerm int64) error {
-	if rf.curTerm != reqTerm {
+	if replyTerm > rf.curTerm {
+		rf.becomeFollower(replyTerm)
+		return fmt.Errorf("%w %s reply recieved from peer #%d.", api.ErrHigherTerm, rpcCallName, peerIdx)
+	}
+
+	if !rf.isState(leader) || rf.curTerm != reqTerm {
 		return fmt.Errorf("%w Ignoring %s reply from peer #%d.", api.ErrOutdatedTerm, rpcCallName, peerIdx)
 	}
 
-	if replyTerm > rf.curTerm {
-		rf.becomeFollower(replyTerm)
-		rf.resetElectionTimer()
-		return fmt.Errorf("%w %s reply recieved from peer #%d.", api.ErrHigherTerm, rpcCallName, peerIdx)
-	}
 	return nil
 }
 

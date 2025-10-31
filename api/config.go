@@ -10,7 +10,6 @@ type RaftConfig struct {
 	Log                LoggerCfg
 	Timings            RaftTimings
 	HttpMonitoringAddr string
-	MessagesQueueSize  int
 }
 
 type LoggerCfg struct {

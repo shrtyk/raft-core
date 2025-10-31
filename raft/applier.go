@@ -1,8 +1,8 @@
 package raft
 
 import (
-	"log/slog"
-	"time"
+	"github.com/shrtyk/raft-core/api"
+	"github.com/shrtyk/raft-core/pkg/logger"
 )
 
 // applies committed log entries to the state machine in the background
@@ -17,15 +17,55 @@ func (rf *Raft) applier() {
 		select {
 		case <-rf.raftCtx.Done():
 			return
-		case msg := <-rf.messagesChan:
-			select {
-			case rf.applyChan <- msg:
-			case <-time.After(10 * time.Millisecond):
-				rf.logger.Warn(
-					"applyChan blocked, dropping apply",
-					slog.Int("me", rf.me),
-					slog.Int64("index", msg.CommandIndex),
-				)
+		case <-rf.signalAppliererChan:
+			for {
+				rf.mu.RLock()
+				if rf.lastAppliedIdx >= rf.commitIdx || rf.killed() {
+					rf.mu.RUnlock()
+					break
+				}
+
+				var msg api.ApplyMessage
+				if rf.lastAppliedIdx < rf.lastIncludedIndex {
+					rf.logger.Debug("applying snapshot to state machine", "index", rf.lastIncludedIndex)
+
+					snapshot, err := rf.persister.ReadSnapshot()
+					if err != nil {
+						rf.logger.Warn("failed to read snapshot", logger.ErrAttr(err))
+						continue
+					}
+
+					msg = api.ApplyMessage{
+						SnapshotValid: true,
+						Snapshot:      snapshot,
+						SnapshotTerm:  rf.lastIncludedTerm,
+						SnapshotIndex: rf.lastIncludedIndex,
+					}
+				} else {
+					applyIdx := rf.lastAppliedIdx + 1
+					rf.logger.Debug("applying command to state machine", "index", applyIdx)
+					sliceIdx := applyIdx - rf.lastIncludedIndex - 1
+					msg = api.ApplyMessage{
+						CommandValid: true,
+						Command:      rf.log[sliceIdx].Cmd,
+						CommandIndex: applyIdx,
+					}
+				}
+				rf.mu.RUnlock()
+
+				select {
+				case <-rf.raftCtx.Done():
+					return
+				case rf.applyChan <- &msg:
+				}
+
+				rf.mu.Lock()
+				if msg.SnapshotValid {
+					rf.lastAppliedIdx = max(rf.lastAppliedIdx, msg.SnapshotIndex)
+				} else {
+					rf.lastAppliedIdx = max(rf.lastAppliedIdx, msg.CommandIndex)
+				}
+				rf.mu.Unlock()
 			}
 		}
 	}
@@ -33,7 +73,7 @@ func (rf *Raft) applier() {
 
 func (rf *Raft) signalApplier() {
 	select {
-	case rf.signalMessagerChan <- struct{}{}:
+	case rf.signalAppliererChan <- struct{}{}:
 	default:
 	}
 }

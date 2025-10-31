@@ -196,7 +196,7 @@ func (ts *Test) Mksrv(ends []*simrpc.ClientEnd, grp harness.Tgid, srv int, persi
 
 	transport := NewSimTransport(ends)
 
-	applyCh := make(chan *api.ApplyMessage, 128)
+	applyCh := make(chan *api.ApplyMessage)
 	cfg := raft.DefaultConfig()
 
 	r, err := raft.NewRaft(cfg, srv, mem_persister, applyCh, transport)
