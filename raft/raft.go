@@ -15,7 +15,7 @@ import (
 	"github.com/shrtyk/raft-core/pkg/storage"
 )
 
-// A Go object implementing a single Raft peer.
+// An implementation of a single Raft peer.
 type Raft struct {
 	wg sync.WaitGroup
 	mu sync.RWMutex // Lock to protect shared access to this peer's state
@@ -151,7 +151,6 @@ func (rf *Raft) Stop() error {
 		}
 	}
 
-	err = errors.Join(err, rf.transport.Close())
 	rf.raftCancel()
 	rf.wg.Wait()
 	return err
