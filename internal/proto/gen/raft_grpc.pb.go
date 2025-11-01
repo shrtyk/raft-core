@@ -22,6 +22,7 @@ const (
 	RaftService_InstallSnapshot_FullMethodName = "/raft.v1.RaftService/InstallSnapshot"
 	RaftService_RequestVote_FullMethodName     = "/raft.v1.RaftService/RequestVote"
 	RaftService_AppendEntries_FullMethodName   = "/raft.v1.RaftService/AppendEntries"
+	RaftService_IsLeader_FullMethodName        = "/raft.v1.RaftService/IsLeader"
 )
 
 // RaftServiceClient is the client API for RaftService service.
@@ -31,6 +32,7 @@ type RaftServiceClient interface {
 	InstallSnapshot(ctx context.Context, in *InstallSnapshotRequest, opts ...grpc.CallOption) (*InstallSnapshotResponse, error)
 	RequestVote(ctx context.Context, in *RequestVoteRequest, opts ...grpc.CallOption) (*RequestVoteResponse, error)
 	AppendEntries(ctx context.Context, in *AppendEntriesRequest, opts ...grpc.CallOption) (*AppendEntriesResponse, error)
+	IsLeader(ctx context.Context, in *IsLeaderRequest, opts ...grpc.CallOption) (*IsLeaderResponse, error)
 }
 
 type raftServiceClient struct {
@@ -71,6 +73,16 @@ func (c *raftServiceClient) AppendEntries(ctx context.Context, in *AppendEntries
 	return out, nil
 }
 
+func (c *raftServiceClient) IsLeader(ctx context.Context, in *IsLeaderRequest, opts ...grpc.CallOption) (*IsLeaderResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(IsLeaderResponse)
+	err := c.cc.Invoke(ctx, RaftService_IsLeader_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // RaftServiceServer is the server API for RaftService service.
 // All implementations must embed UnimplementedRaftServiceServer
 // for forward compatibility.
@@ -78,6 +90,7 @@ type RaftServiceServer interface {
 	InstallSnapshot(context.Context, *InstallSnapshotRequest) (*InstallSnapshotResponse, error)
 	RequestVote(context.Context, *RequestVoteRequest) (*RequestVoteResponse, error)
 	AppendEntries(context.Context, *AppendEntriesRequest) (*AppendEntriesResponse, error)
+	IsLeader(context.Context, *IsLeaderRequest) (*IsLeaderResponse, error)
 	mustEmbedUnimplementedRaftServiceServer()
 }
 
@@ -96,6 +109,9 @@ func (UnimplementedRaftServiceServer) RequestVote(context.Context, *RequestVoteR
 }
 func (UnimplementedRaftServiceServer) AppendEntries(context.Context, *AppendEntriesRequest) (*AppendEntriesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AppendEntries not implemented")
+}
+func (UnimplementedRaftServiceServer) IsLeader(context.Context, *IsLeaderRequest) (*IsLeaderResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method IsLeader not implemented")
 }
 func (UnimplementedRaftServiceServer) mustEmbedUnimplementedRaftServiceServer() {}
 func (UnimplementedRaftServiceServer) testEmbeddedByValue()                     {}
@@ -172,6 +188,24 @@ func _RaftService_AppendEntries_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _RaftService_IsLeader_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(IsLeaderRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RaftServiceServer).IsLeader(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RaftService_IsLeader_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RaftServiceServer).IsLeader(ctx, req.(*IsLeaderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // RaftService_ServiceDesc is the grpc.ServiceDesc for RaftService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -190,6 +224,10 @@ var RaftService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AppendEntries",
 			Handler:    _RaftService_AppendEntries_Handler,
+		},
+		{
+			MethodName: "IsLeader",
+			Handler:    _RaftService_IsLeader_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

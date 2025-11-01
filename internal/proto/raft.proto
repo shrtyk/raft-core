@@ -8,6 +8,7 @@ service RaftService {
   rpc InstallSnapshot(InstallSnapshotRequest) returns (InstallSnapshotResponse);
   rpc RequestVote(RequestVoteRequest) returns (RequestVoteResponse);
   rpc AppendEntries(AppendEntriesRequest) returns (AppendEntriesResponse);
+  rpc IsLeader(IsLeaderRequest) returns (IsLeaderResponse);
 }
 
 message LogEntry {
@@ -60,4 +61,10 @@ message AppendEntriesResponse {
   bool Success = 2;
   int64 ConflictIndex = 3;
   int64 ConflictTerm = 4;
+}
+
+message IsLeaderRequest {}
+message IsLeaderResponse {
+  int64 PeerId = 1;
+  bool IsLeader = 2;
 }
