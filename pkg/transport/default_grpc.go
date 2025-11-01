@@ -2,23 +2,39 @@ package transport
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
 
 	raftpb "github.com/shrtyk/raft-core/internal/proto/gen"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 type GRPCTransport struct {
 	requestTimeout time.Duration
+	conns          []*grpc.ClientConn
 	clients        []raftpb.RaftServiceClient
 }
 
-func NewGRPCTransport(reqTimeout time.Duration, peers []raftpb.RaftServiceClient) *GRPCTransport {
+func NewGRPCTransport(reqTimeout time.Duration, peerAddrs []string) (*GRPCTransport, error) {
 	tr := &GRPCTransport{
 		requestTimeout: reqTimeout,
-		clients:        peers,
+		clients:        make([]raftpb.RaftServiceClient, len(peerAddrs)),
+		conns:          make([]*grpc.ClientConn, len(peerAddrs)),
 	}
 
-	return tr
+	for i, addr := range peerAddrs {
+		conn, err := grpc.NewClient(
+			addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			return nil, fmt.Errorf("dial peer %d: %w", i, err)
+		}
+		tr.conns[i] = conn
+		tr.clients[i] = raftpb.NewRaftServiceClient(conn)
+	}
+
+	return tr, nil
 }
 
 func (t *GRPCTransport) SendRequestVote(
@@ -50,4 +66,16 @@ func (t *GRPCTransport) SendInstallSnapshot(
 
 func (t *GRPCTransport) PeersCount() int {
 	return len(t.clients)
+}
+
+func (t *GRPCTransport) Close() error {
+	var err error
+	for i, conn := range t.conns {
+		if cerr := conn.Close(); cerr != nil {
+			err = errors.Join(
+				err,
+				fmt.Errorf("failed to close peer %d connection: %w", i, cerr))
+		}
+	}
+	return err
 }
