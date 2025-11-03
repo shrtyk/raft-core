@@ -190,3 +190,12 @@ func (rf *Raft) InstallSnapshot(ctx context.Context,
 
 	return
 }
+
+func (rf *Raft) SubmitCommand(ctx context.Context, req *raftpb.SubmitRequest) (*raftpb.SubmitResponse, error) {
+	index, term, isLeader := rf.Submit(req.Command)
+	return &raftpb.SubmitResponse{
+		Index:    index,
+		Term:     term,
+		IsLeader: isLeader,
+	}, nil
+}
