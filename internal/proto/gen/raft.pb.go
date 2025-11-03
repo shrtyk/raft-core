@@ -637,6 +637,110 @@ func (x *IsLeaderResponse) GetIsLeader() bool {
 	return false
 }
 
+type SubmitRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Command       []byte                 `protobuf:"bytes,1,opt,name=Command,proto3" json:"Command,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SubmitRequest) Reset() {
+	*x = SubmitRequest{}
+	mi := &file_raft_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SubmitRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SubmitRequest) ProtoMessage() {}
+
+func (x *SubmitRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_raft_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SubmitRequest.ProtoReflect.Descriptor instead.
+func (*SubmitRequest) Descriptor() ([]byte, []int) {
+	return file_raft_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *SubmitRequest) GetCommand() []byte {
+	if x != nil {
+		return x.Command
+	}
+	return nil
+}
+
+type SubmitResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Index         int64                  `protobuf:"varint,1,opt,name=Index,proto3" json:"Index,omitempty"`
+	Term          int64                  `protobuf:"varint,2,opt,name=Term,proto3" json:"Term,omitempty"`
+	IsLeader      bool                   `protobuf:"varint,3,opt,name=IsLeader,proto3" json:"IsLeader,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SubmitResponse) Reset() {
+	*x = SubmitResponse{}
+	mi := &file_raft_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SubmitResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SubmitResponse) ProtoMessage() {}
+
+func (x *SubmitResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_raft_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SubmitResponse.ProtoReflect.Descriptor instead.
+func (*SubmitResponse) Descriptor() ([]byte, []int) {
+	return file_raft_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *SubmitResponse) GetIndex() int64 {
+	if x != nil {
+		return x.Index
+	}
+	return 0
+}
+
+func (x *SubmitResponse) GetTerm() int64 {
+	if x != nil {
+		return x.Term
+	}
+	return 0
+}
+
+func (x *SubmitResponse) GetIsLeader() bool {
+	if x != nil {
+		return x.IsLeader
+	}
+	return false
+}
+
 var File_raft_proto protoreflect.FileDescriptor
 
 const file_raft_proto_rawDesc = "" +
@@ -684,12 +788,19 @@ const file_raft_proto_rawDesc = "" +
 	"\x0fIsLeaderRequest\"F\n" +
 	"\x10IsLeaderResponse\x12\x16\n" +
 	"\x06PeerId\x18\x01 \x01(\x03R\x06PeerId\x12\x1a\n" +
-	"\bIsLeader\x18\x02 \x01(\bR\bIsLeader2\xbe\x02\n" +
+	"\bIsLeader\x18\x02 \x01(\bR\bIsLeader\")\n" +
+	"\rSubmitRequest\x12\x18\n" +
+	"\aCommand\x18\x01 \x01(\fR\aCommand\"V\n" +
+	"\x0eSubmitResponse\x12\x14\n" +
+	"\x05Index\x18\x01 \x01(\x03R\x05Index\x12\x12\n" +
+	"\x04Term\x18\x02 \x01(\x03R\x04Term\x12\x1a\n" +
+	"\bIsLeader\x18\x03 \x01(\bR\bIsLeader2\x80\x03\n" +
 	"\vRaftService\x12T\n" +
 	"\x0fInstallSnapshot\x12\x1f.raft.v1.InstallSnapshotRequest\x1a .raft.v1.InstallSnapshotResponse\x12H\n" +
 	"\vRequestVote\x12\x1b.raft.v1.RequestVoteRequest\x1a\x1c.raft.v1.RequestVoteResponse\x12N\n" +
 	"\rAppendEntries\x12\x1d.raft.v1.AppendEntriesRequest\x1a\x1e.raft.v1.AppendEntriesResponse\x12?\n" +
-	"\bIsLeader\x12\x18.raft.v1.IsLeaderRequest\x1a\x19.raft.v1.IsLeaderResponseB7Z5github.com/shrtyk/raft-core/internal/proto/gen;raftpbb\x06proto3"
+	"\bIsLeader\x12\x18.raft.v1.IsLeaderRequest\x1a\x19.raft.v1.IsLeaderResponse\x12@\n" +
+	"\rSubmitCommand\x12\x16.raft.v1.SubmitRequest\x1a\x17.raft.v1.SubmitResponseB7Z5github.com/shrtyk/raft-core/internal/proto/gen;raftpbb\x06proto3"
 
 var (
 	file_raft_proto_rawDescOnce sync.Once
@@ -703,7 +814,7 @@ func file_raft_proto_rawDescGZIP() []byte {
 	return file_raft_proto_rawDescData
 }
 
-var file_raft_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_raft_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_raft_proto_goTypes = []any{
 	(*LogEntry)(nil),                // 0: raft.v1.LogEntry
 	(*RaftPersistentState)(nil),     // 1: raft.v1.RaftPersistentState
@@ -715,23 +826,27 @@ var file_raft_proto_goTypes = []any{
 	(*AppendEntriesResponse)(nil),   // 7: raft.v1.AppendEntriesResponse
 	(*IsLeaderRequest)(nil),         // 8: raft.v1.IsLeaderRequest
 	(*IsLeaderResponse)(nil),        // 9: raft.v1.IsLeaderResponse
+	(*SubmitRequest)(nil),           // 10: raft.v1.SubmitRequest
+	(*SubmitResponse)(nil),          // 11: raft.v1.SubmitResponse
 }
 var file_raft_proto_depIdxs = []int32{
-	0, // 0: raft.v1.RaftPersistentState.Log:type_name -> raft.v1.LogEntry
-	0, // 1: raft.v1.AppendEntriesRequest.Entries:type_name -> raft.v1.LogEntry
-	2, // 2: raft.v1.RaftService.InstallSnapshot:input_type -> raft.v1.InstallSnapshotRequest
-	4, // 3: raft.v1.RaftService.RequestVote:input_type -> raft.v1.RequestVoteRequest
-	6, // 4: raft.v1.RaftService.AppendEntries:input_type -> raft.v1.AppendEntriesRequest
-	8, // 5: raft.v1.RaftService.IsLeader:input_type -> raft.v1.IsLeaderRequest
-	3, // 6: raft.v1.RaftService.InstallSnapshot:output_type -> raft.v1.InstallSnapshotResponse
-	5, // 7: raft.v1.RaftService.RequestVote:output_type -> raft.v1.RequestVoteResponse
-	7, // 8: raft.v1.RaftService.AppendEntries:output_type -> raft.v1.AppendEntriesResponse
-	9, // 9: raft.v1.RaftService.IsLeader:output_type -> raft.v1.IsLeaderResponse
-	6, // [6:10] is the sub-list for method output_type
-	2, // [2:6] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	0,  // 0: raft.v1.RaftPersistentState.Log:type_name -> raft.v1.LogEntry
+	0,  // 1: raft.v1.AppendEntriesRequest.Entries:type_name -> raft.v1.LogEntry
+	2,  // 2: raft.v1.RaftService.InstallSnapshot:input_type -> raft.v1.InstallSnapshotRequest
+	4,  // 3: raft.v1.RaftService.RequestVote:input_type -> raft.v1.RequestVoteRequest
+	6,  // 4: raft.v1.RaftService.AppendEntries:input_type -> raft.v1.AppendEntriesRequest
+	8,  // 5: raft.v1.RaftService.IsLeader:input_type -> raft.v1.IsLeaderRequest
+	10, // 6: raft.v1.RaftService.SubmitCommand:input_type -> raft.v1.SubmitRequest
+	3,  // 7: raft.v1.RaftService.InstallSnapshot:output_type -> raft.v1.InstallSnapshotResponse
+	5,  // 8: raft.v1.RaftService.RequestVote:output_type -> raft.v1.RequestVoteResponse
+	7,  // 9: raft.v1.RaftService.AppendEntries:output_type -> raft.v1.AppendEntriesResponse
+	9,  // 10: raft.v1.RaftService.IsLeader:output_type -> raft.v1.IsLeaderResponse
+	11, // 11: raft.v1.RaftService.SubmitCommand:output_type -> raft.v1.SubmitResponse
+	7,  // [7:12] is the sub-list for method output_type
+	2,  // [2:7] is the sub-list for method input_type
+	2,  // [2:2] is the sub-list for extension type_name
+	2,  // [2:2] is the sub-list for extension extendee
+	0,  // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_raft_proto_init() }
@@ -745,7 +860,7 @@ func file_raft_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_raft_proto_rawDesc), len(file_raft_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   10,
+			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

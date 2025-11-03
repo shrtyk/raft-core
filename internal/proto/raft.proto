@@ -9,6 +9,7 @@ service RaftService {
   rpc RequestVote(RequestVoteRequest) returns (RequestVoteResponse);
   rpc AppendEntries(AppendEntriesRequest) returns (AppendEntriesResponse);
   rpc IsLeader(IsLeaderRequest) returns (IsLeaderResponse);
+  rpc SubmitCommand(SubmitRequest) returns (SubmitResponse);
 }
 
 message LogEntry {
@@ -67,4 +68,12 @@ message IsLeaderRequest {}
 message IsLeaderResponse {
   int64 PeerId = 1;
   bool IsLeader = 2;
+}
+
+message SubmitRequest { bytes Command = 1; }
+
+message SubmitResponse {
+  int64 Index = 1;
+  int64 Term = 2;
+  bool IsLeader = 3;
 }
