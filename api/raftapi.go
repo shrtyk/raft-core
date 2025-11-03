@@ -48,14 +48,3 @@ type Raft interface {
 	// Typically used by tests.
 	Killed() bool
 }
-
-type ApplyMessage struct {
-	CommandValid bool
-	Command      []byte
-	CommandIndex int64
-
-	SnapshotValid bool
-	Snapshot      []byte
-	SnapshotIndex int64
-	SnapshotTerm  int64
-}

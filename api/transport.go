@@ -16,6 +16,4 @@ type Transport interface {
 		ctx context.Context, to int, req *raftpb.InstallSnapshotRequest) (*raftpb.InstallSnapshotResponse, error)
 
 	PeersCount() int
-	// Stop closes all connections ir internal resources
-	Close() error
 }
