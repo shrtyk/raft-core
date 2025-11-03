@@ -1,7 +1,7 @@
 package testsim
 
 import (
-	"github.com/shrtyk/raft-core/raft/tests/harness"
+	"github.com/shrtyk/raft-core/tests/harness"
 )
 
 // MemPersister is an in-memory persister that implements the api.Persister interface.

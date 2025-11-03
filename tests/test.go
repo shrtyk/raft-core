@@ -12,9 +12,9 @@ import (
 
 	"github.com/shrtyk/raft-core/api"
 	"github.com/shrtyk/raft-core/raft"
-	"github.com/shrtyk/raft-core/raft/tests/harness"
-	"github.com/shrtyk/raft-core/raft/tests/simgob"
-	"github.com/shrtyk/raft-core/raft/tests/simrpc"
+	"github.com/shrtyk/raft-core/tests/harness"
+	"github.com/shrtyk/raft-core/tests/simgob"
+	"github.com/shrtyk/raft-core/tests/simrpc"
 )
 
 type Command struct {
@@ -199,7 +199,7 @@ func (ts *Test) Mksrv(ends []*simrpc.ClientEnd, grp harness.Tgid, srv int, persi
 	applyCh := make(chan *api.ApplyMessage)
 	cfg := raft.DefaultConfig()
 
-	r, err := raft.NewRaft(cfg, srv, mem_persister, applyCh, transport)
+	r, err := raft.NewRaft(cfg, srv, mem_persister, applyCh, transport, nil)
 	if err != nil {
 		ts.t.Fatal(err)
 	}

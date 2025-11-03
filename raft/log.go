@@ -101,3 +101,13 @@ func (rf *Raft) isCandidateLogUpToDate(candidateLastLogIdx int64, candidateLastL
 	}
 	return candidateLastLogIdx >= myLastLogIdx
 }
+
+// initializeNextIndexes initializes indexes based on the current log state.
+//
+// If for some reason it used outside of Start function the mutex should be locked.
+func (rf *Raft) initializeNextIndexes() {
+	lastLogIdx, _ := rf.lastLogIdxAndTerm()
+	for i := range rf.nextIdx {
+		rf.nextIdx[i] = lastLogIdx + 1
+	}
+}

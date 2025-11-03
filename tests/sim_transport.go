@@ -5,7 +5,7 @@ import (
 	"errors"
 
 	raftpb "github.com/shrtyk/raft-core/internal/proto/gen"
-	"github.com/shrtyk/raft-core/raft/tests/simrpc"
+	"github.com/shrtyk/raft-core/tests/simrpc"
 )
 
 // SimTransport is a mock transport layer that implements the api.Transport interface.
@@ -49,8 +49,4 @@ func (st *SimTransport) SendInstallSnapshot(ctx context.Context, to int, req *ra
 
 func (st *SimTransport) PeersCount() int {
 	return len(st.ends)
-}
-
-func (st *SimTransport) Close() error {
-	return nil
 }

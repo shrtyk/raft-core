@@ -17,7 +17,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shrtyk/raft-core/raft/tests/simrpc"
+	"github.com/shrtyk/raft-core/tests/simrpc"
 )
 
 const GRP0 = 0

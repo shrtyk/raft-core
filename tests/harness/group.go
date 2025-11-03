@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/shrtyk/raft-core/raft/tests/simrpc"
+	"github.com/shrtyk/raft-core/tests/simrpc"
 )
 
 type Tgid int

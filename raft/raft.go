@@ -76,18 +76,110 @@ type Raft struct {
 
 	monitoringServer MonitoringServer
 	grpcServer       GRPCServer
+	fsm              api.FSM
 	raftpb.UnimplementedRaftServiceServer
 }
 
-// State returns current term and whether this server believes it is the leader
-func (rf *Raft) State() (int64, bool) {
-	rf.mu.RLock()
-	defer rf.mu.RUnlock()
-	return rf.curTerm, rf.isState(leader)
+// NewRaft creates a new Raft peer
+func NewRaft(
+	cfg *api.RaftConfig,
+	me int,
+	persister api.Persister,
+	applyCh chan *api.ApplyMessage,
+	transport api.Transport,
+	fsm api.FSM,
+) (api.Raft, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	rf := &Raft{
+		peersCount:          transport.PeersCount(),
+		transport:           transport,
+		me:                  me,
+		applyChan:           applyCh,
+		signalAppliererChan: make(chan struct{}, 1),
+		log:                 make([]*raftpb.LogEntry, 0),
+		nextIdx:             make([]int64, transport.PeersCount()),
+		matchIdx:            make([]int64, transport.PeersCount()),
+		fsm:                 fsm,
+		raftCtx:             ctx,
+		raftCancel:          cancel,
+	}
+
+	if cfg == nil {
+		cfg = DefaultConfig()
+	}
+
+	rf.cfg = cfg
+	if cfg.Log.Env == logger.Dev {
+		_, rf.logger = logger.NewTestLogger()
+	} else {
+		rf.logger = logger.NewLogger(rf.cfg.Log.Env, false).With(slog.Int("me", me))
+	}
+
+	if persister == nil {
+		s, err := storage.NewDefaultStorage("data", rf.logger)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize default storage: %w", err)
+		}
+		persister = s
+	}
+	rf.persister = persister
+	return rf, nil
 }
 
-func (rf *Raft) PersistedStateSize() (int, error) {
-	return rf.persister.RaftStateSize()
+func (rf *Raft) Start() error {
+	state, err := rf.persister.ReadRaftState()
+	if err != nil {
+		return fmt.Errorf("failed to read peer #%d state: %w", rf.me, err)
+	}
+	rf.restoreState(state)
+	rf.initializeNextIndexes()
+	rf.electionTimer = time.NewTimer(rf.randElectionInterval())
+	rf.heartbeatTicker = time.NewTicker(rf.cfg.Timings.HeartbeatTimeout)
+	rf.heartbeatTicker.Stop()
+	rf.becomeFollower(rf.curTerm)
+
+	if rf.grpcServer != nil {
+		if err := rf.grpcServer.Start(); err != nil {
+			return fmt.Errorf("failed to start gRPC server: %w", err)
+		}
+	}
+
+	if rf.monitoringServer != nil {
+		if err := rf.monitoringServer.Start(); err != nil {
+			return fmt.Errorf("failed to start monitoring HTTP server: %w", err)
+		}
+	}
+
+	rf.wg.Add(2)
+	go rf.applier()
+	go rf.ticker()
+
+	return nil
+}
+
+// Stop sets the peer to a dead state and stops completely
+func (rf *Raft) Stop() error {
+	tctx, tcancel := context.WithTimeout(rf.raftCtx, rf.cfg.Timings.ShutdownTimeout)
+	defer tcancel()
+
+	var err error
+	atomic.StoreInt32(&rf.dead, 1)
+	if rf.grpcServer != nil {
+		if serr := rf.grpcServer.Stop(); serr != nil {
+			err = errors.Join(err, fmt.Errorf("failed to shutdown gRPC server: %w", serr))
+		}
+	}
+
+	if rf.monitoringServer != nil {
+		if serr := rf.monitoringServer.Stop(tctx); serr != nil {
+			err = errors.Join(err, fmt.Errorf("failed to shutdown monitoring server: %w", serr))
+		}
+	}
+
+	rf.raftCancel()
+	rf.wg.Wait()
+	return err
 }
 
 // Submit proposes a new command to be replicated
@@ -125,115 +217,4 @@ func (rf *Raft) Submit(command []byte) (int64, int64, bool) {
 	go rf.sendSnapshotOrEntries()
 
 	return lastLogIdx, term, true
-}
-
-// Killed returns true if the server has been killed.
-func (rf *Raft) Killed() bool {
-	return atomic.LoadInt32(&rf.dead) == 1
-}
-
-// Stop sets the peer to a dead state and stops completely
-func (rf *Raft) Stop() error {
-	tctx, tcancel := context.WithTimeout(rf.raftCtx, rf.cfg.Timings.ShutdownTimeout)
-	defer tcancel()
-
-	var err error
-	atomic.StoreInt32(&rf.dead, 1)
-	if rf.grpcServer != nil {
-		if serr := rf.grpcServer.Stop(); serr != nil {
-			err = errors.Join(err, fmt.Errorf("failed to shutdown gRPC server: %w", serr))
-		}
-	}
-
-	if rf.monitoringServer != nil {
-		if serr := rf.monitoringServer.Stop(tctx); serr != nil {
-			err = errors.Join(err, fmt.Errorf("failed to shutdown monitoring server: %w", serr))
-		}
-	}
-
-	err = errors.Join(err, rf.transport.Close())
-	rf.raftCancel()
-	rf.wg.Wait()
-	return err
-}
-
-func (rf *Raft) Start() error {
-	state, err := rf.persister.ReadRaftState()
-	if err != nil {
-		return fmt.Errorf("failed to read peer #%d state: %w", rf.me, err)
-	}
-	rf.restoreState(state)
-
-	rf.electionTimer = time.NewTimer(rf.randElectionInterval())
-	rf.heartbeatTicker = time.NewTicker(rf.cfg.Timings.HeartbeatTimeout)
-	rf.heartbeatTicker.Stop()
-	rf.becomeFollower(rf.curTerm)
-
-	if rf.grpcServer != nil {
-		if err := rf.grpcServer.Start(); err != nil {
-			return fmt.Errorf("failed to start gRPC server: %w", err)
-		}
-	}
-
-	if rf.monitoringServer != nil {
-		if err := rf.monitoringServer.Start(); err != nil {
-			return fmt.Errorf("failed to start monitoring HTTP server: %w", err)
-		}
-	}
-
-	rf.wg.Add(2)
-	go rf.applier()
-	go rf.ticker()
-
-	return nil
-}
-
-// NewRaft creates a new Raft peer
-func NewRaft(
-	cfg *api.RaftConfig,
-	me int,
-	persister api.Persister,
-	applyCh chan *api.ApplyMessage,
-	transport api.Transport,
-) (api.Raft, error) {
-	rf := &Raft{
-		peersCount:          transport.PeersCount(),
-		transport:           transport,
-		me:                  me,
-		applyChan:           applyCh,
-		signalAppliererChan: make(chan struct{}, 1),
-		log:                 make([]*raftpb.LogEntry, 0),
-		nextIdx:             make([]int64, transport.PeersCount()),
-		matchIdx:            make([]int64, transport.PeersCount()),
-	}
-
-	rf.raftCtx, rf.raftCancel = context.WithCancel(context.Background())
-
-	if cfg == nil {
-		cfg = DefaultConfig()
-	}
-
-	rf.cfg = cfg
-	if cfg.Log.Env == logger.Dev {
-		_, rf.logger = logger.NewTestLogger()
-	} else {
-		rf.logger = logger.NewLogger(rf.cfg.Log.Env, false).With(slog.Int("me", me))
-	}
-
-	if persister == nil {
-		s, err := storage.NewDefaultStorage("data", rf.logger)
-		if err != nil {
-			return nil, fmt.Errorf("failed to initialize default storage: %w", err)
-		}
-		persister = s
-	}
-
-	rf.persister = persister
-
-	lastLogIdx, _ := rf.lastLogIdxAndTerm()
-	for i := range rf.nextIdx {
-		rf.nextIdx[i] = lastLogIdx + 1
-	}
-
-	return rf, nil
 }

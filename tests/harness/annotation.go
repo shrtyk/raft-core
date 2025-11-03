@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/anishathalye/porcupine"
-	"github.com/shrtyk/raft-core/raft/tests/models"
+	"github.com/shrtyk/raft-core/tests/models"
 )
 
 ///

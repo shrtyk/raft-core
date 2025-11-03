@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shrtyk/raft-core/raft/tests/harness"
+	"github.com/shrtyk/raft-core/tests/harness"
 )
 
 const RaftElectionTimeout = 1000 * time.Millisecond

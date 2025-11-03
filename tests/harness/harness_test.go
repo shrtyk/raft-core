@@ -3,8 +3,8 @@ package harness_test
 import (
 	"testing"
 
-	harness "github.com/shrtyk/raft-core/raft/tests/harness"
-	"github.com/shrtyk/raft-core/raft/tests/simrpc"
+	harness "github.com/shrtyk/raft-core/tests/harness"
+	"github.com/shrtyk/raft-core/tests/simrpc"
 )
 
 type Server struct {

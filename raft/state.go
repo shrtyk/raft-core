@@ -84,6 +84,14 @@ func (rf *Raft) checkOrUpdateTerm(rpcCallName string, peerIdx int, reqTerm, repl
 	return nil
 }
 
-func (rf *Raft) killed() bool {
+// Killed returns true if the server has been killed.
+func (rf *Raft) Killed() bool {
 	return atomic.LoadInt32(&rf.dead) == 1
+}
+
+// State returns current term and whether this server believes it is the leader
+func (rf *Raft) State() (int64, bool) {
+	rf.mu.RLock()
+	defer rf.mu.RUnlock()
+	return rf.curTerm, rf.isState(leader)
 }

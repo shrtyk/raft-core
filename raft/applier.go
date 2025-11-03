@@ -20,7 +20,7 @@ func (rf *Raft) applier() {
 		case <-rf.signalAppliererChan:
 			for {
 				rf.mu.RLock()
-				if rf.lastAppliedIdx >= rf.commitIdx || rf.killed() {
+				if rf.lastAppliedIdx >= rf.commitIdx || rf.Killed() {
 					rf.mu.RUnlock()
 					break
 				}

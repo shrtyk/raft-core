@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shrtyk/raft-core/raft/tests/harness"
-	"github.com/shrtyk/raft-core/raft/tests/simgob"
+	"github.com/shrtyk/raft-core/tests/harness"
+	"github.com/shrtyk/raft-core/tests/simgob"
 )
 
 const (

@@ -6,8 +6,8 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/shrtyk/raft-core/raft/tests/harness"
-	"github.com/shrtyk/raft-core/raft/tests/simgob"
+	"github.com/shrtyk/raft-core/tests/harness"
+	"github.com/shrtyk/raft-core/tests/simgob"
 )
 
 func snapcommon(t *testing.T, name string, disconnect bool, reliable bool, crash bool) {

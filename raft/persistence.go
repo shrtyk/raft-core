@@ -75,3 +75,7 @@ func (rf *Raft) restoreState(data []byte) {
 	rf.commitIdx = rf.lastIncludedIndex
 	rf.lastAppliedIdx = rf.lastIncludedIndex
 }
+
+func (rf *Raft) PersistedStateSize() (int, error) {
+	return rf.persister.RaftStateSize()
+}

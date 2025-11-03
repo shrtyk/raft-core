@@ -59,7 +59,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/shrtyk/raft-core/raft/tests/simgob"
+	"github.com/shrtyk/raft-core/tests/simgob"
 )
 
 const (

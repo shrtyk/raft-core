@@ -4,7 +4,7 @@ import (
 	//"log"
 	"sync"
 
-	"github.com/shrtyk/raft-core/raft/tests/simrpc"
+	"github.com/shrtyk/raft-core/tests/simrpc"
 )
 
 type end struct {
