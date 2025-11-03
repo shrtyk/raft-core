@@ -9,10 +9,11 @@ import (
 type Func func(ctx context.Context) error
 
 // DelayFunc is a closure which will return delay generator function
-type DelayFunc func() func() time.Duration
+type DelayFunc func(int) time.Duration
 
 type config struct {
 	maxAttempts int
+	baseDelay   time.Duration
 	delayFunc   DelayFunc
 }
 
@@ -27,27 +28,29 @@ func WithMaxAttempts(n int) Option {
 	}
 }
 
-// WithDelayFunc sets the function which will
-// return timeout duration for every attempt.
-// The default function will return: 150ms, 300ms, 600ms.
-func WithDelayFunc(d DelayFunc) Option {
+// WithBaseDelay sets base retry duration.
+// Default value 150ms.
+func WithBaseDelay(d time.Duration) Option {
 	return func(c *config) {
-		c.delayFunc = d
+		c.baseDelay = d
+	}
+}
+
+// WithDelayFunc will return new delay based on current attempt
+// By default delay will be doubled after every attempt.
+func WithDelayFunc(fn func(int) time.Duration) Option {
+	return func(c *config) {
+		c.delayFunc = fn
 	}
 }
 
 func Do(ctx context.Context, fn Func, opts ...Option) error {
 	cfg := &config{
 		maxAttempts: 3,
-		delayFunc: func() func() time.Duration {
-			base := 150 * time.Millisecond
-			attempt := 0
-			return func() time.Duration {
-				delay := base << attempt
-				attempt++
-				return delay
-			}
-		},
+		baseDelay:   150 * time.Millisecond,
+	}
+	cfg.delayFunc = func(attempt int) time.Duration {
+		return time.Duration(int64(cfg.baseDelay) << attempt)
 	}
 
 	for _, opt := range opts {
@@ -55,7 +58,6 @@ func Do(ctx context.Context, fn Func, opts ...Option) error {
 	}
 
 	var lastErr error
-	df := cfg.delayFunc()
 	for attempt := range cfg.maxAttempts {
 		lastErr = fn(ctx)
 		if lastErr == nil {
@@ -66,7 +68,7 @@ func Do(ctx context.Context, fn Func, opts ...Option) error {
 			break
 		}
 
-		timer := time.NewTimer(df())
+		timer := time.NewTimer(cfg.delayFunc(attempt))
 		select {
 		case <-ctx.Done():
 			timer.Stop()

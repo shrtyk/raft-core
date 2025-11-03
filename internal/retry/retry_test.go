@@ -39,9 +39,8 @@ func TestRetry(t *testing.T) {
 			context.Background(),
 			fn,
 			WithMaxAttempts(5),
-			WithDelayFunc(func() func() time.Duration {
-				return func() time.Duration { return 1 * time.Millisecond }
-			}))
+			WithBaseDelay(1*time.Millisecond),
+		)
 
 		if err != nil {
 			t.Errorf("expected no error, but got: %v", err)
@@ -63,11 +62,7 @@ func TestRetry(t *testing.T) {
 			context.Background(),
 			fn,
 			WithMaxAttempts(4),
-			WithDelayFunc(func() func() time.Duration {
-				return func() time.Duration {
-					return 1 * time.Millisecond
-				}
-			}))
+			WithBaseDelay(1*time.Millisecond))
 
 		if !errors.Is(err, expectedErr) {
 			t.Errorf("expected error '%v', but got: %v", expectedErr, err)
@@ -94,11 +89,7 @@ func TestRetry(t *testing.T) {
 			ctx,
 			fn,
 			WithMaxAttempts(10),
-			WithDelayFunc(func() func() time.Duration {
-				return func() time.Duration {
-					return 10 * time.Millisecond
-				}
-			}))
+			WithBaseDelay(10*time.Millisecond))
 
 		if !errors.Is(err, context.Canceled) {
 			t.Errorf("expected context.Canceled error, but got: %v", err)
