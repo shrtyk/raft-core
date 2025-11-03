@@ -2,12 +2,14 @@ package coordinator
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"sync"
 	"time"
 
 	"github.com/shrtyk/raft-core/api"
 	raftpb "github.com/shrtyk/raft-core/internal/proto/gen"
+	"github.com/shrtyk/raft-core/internal/retry"
 	"github.com/shrtyk/raft-core/pkg/logger"
 	"google.golang.org/grpc"
 )
@@ -30,6 +32,7 @@ func NewCoordinator(
 	c := &Coordinator{
 		requestTimeout: reqTimeout,
 		clients:        make([]raftpb.RaftServiceClient, len(conns)),
+		leaderId:       -1,
 	}
 
 	for i, conn := range conns {
@@ -39,8 +42,53 @@ func NewCoordinator(
 	return c, nil
 }
 
-func (*Coordinator) Submit(ctx context.Context, cmd []byte) (*api.SubmitResult, error) {
-	return nil, nil
+func (c *Coordinator) Submit(ctx context.Context, cmd []byte) (*api.SubmitResult, error) {
+	var result *api.SubmitResult
+
+	err := retry.Do(ctx, func(ctx context.Context) error {
+		if c.leaderId == -1 {
+			leader, err := c.discoverLeader(ctx)
+			if err != nil {
+				c.logger.Warn("failed to discover leader", logger.ErrAttr(err))
+				return err
+			}
+			c.leaderId = leader
+		}
+
+		req := &raftpb.SubmitRequest{Command: cmd}
+		resp, err := c.clients[c.leaderId].SubmitCommand(ctx, req)
+		if err != nil {
+			c.logger.Warn(
+				"failed to submit command to leader",
+				slog.Int("leader_id", c.leaderId),
+				logger.ErrAttr(err),
+			)
+			c.leaderId = -1
+			return err
+		}
+
+		if resp.IsLeader {
+			result = &api.SubmitResult{
+				Term:     resp.Term,
+				LogIndex: resp.Index,
+				IsLeader: true,
+			}
+			return nil
+		} else {
+			c.logger.Debug(
+				"contacted node is not leader, retrying",
+				slog.Int("node_id", c.leaderId),
+			)
+			c.leaderId = -1
+			return errors.New("not leader, retrying")
+		}
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }
 
 func (c *Coordinator) discoverLeader(ctx context.Context) (peerId int, err error) {
