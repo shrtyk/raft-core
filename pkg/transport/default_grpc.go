@@ -2,35 +2,27 @@ package transport
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"time"
 
+	"github.com/shrtyk/raft-core/api"
 	raftpb "github.com/shrtyk/raft-core/internal/proto/gen"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
+
+var _ api.Transport = (*GRPCTransport)(nil)
 
 type GRPCTransport struct {
 	requestTimeout time.Duration
-	conns          []*grpc.ClientConn
 	clients        []raftpb.RaftServiceClient
 }
 
-func NewGRPCTransport(reqTimeout time.Duration, peerAddrs []string) (*GRPCTransport, error) {
+func NewGRPCTransport(reqTimeout time.Duration, conns []*grpc.ClientConn) (*GRPCTransport, error) {
 	tr := &GRPCTransport{
 		requestTimeout: reqTimeout,
-		clients:        make([]raftpb.RaftServiceClient, len(peerAddrs)),
-		conns:          make([]*grpc.ClientConn, len(peerAddrs)),
+		clients:        make([]raftpb.RaftServiceClient, len(conns)),
 	}
 
-	for i, addr := range peerAddrs {
-		conn, err := grpc.NewClient(
-			addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-		if err != nil {
-			return nil, fmt.Errorf("dial peer %d: %w", i, err)
-		}
-		tr.conns[i] = conn
+	for i, conn := range conns {
 		tr.clients[i] = raftpb.NewRaftServiceClient(conn)
 	}
 
@@ -66,16 +58,4 @@ func (t *GRPCTransport) SendInstallSnapshot(
 
 func (t *GRPCTransport) PeersCount() int {
 	return len(t.clients)
-}
-
-func (t *GRPCTransport) Close() error {
-	var err error
-	for i, conn := range t.conns {
-		if cerr := conn.Close(); cerr != nil {
-			err = errors.Join(
-				err,
-				fmt.Errorf("failed to close peer %d connection: %w", i, cerr))
-		}
-	}
-	return err
 }

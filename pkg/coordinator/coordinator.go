@@ -2,43 +2,45 @@ package coordinator
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"log/slog"
 	"sync"
 	"time"
 
+	"github.com/shrtyk/raft-core/api"
 	raftpb "github.com/shrtyk/raft-core/internal/proto/gen"
 	"github.com/shrtyk/raft-core/pkg/logger"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
+
+var _ api.Coordinator = (*Coordinator)(nil)
 
 type Coordinator struct {
 	logger         *slog.Logger
 	requestTimeout time.Duration
-	conns          []*grpc.ClientConn
 	clients        []raftpb.RaftServiceClient
+
+	leaderId int
 }
 
 func NewCoordinator(
-	peerAddrs []string,
+	conns []*grpc.ClientConn,
 	reqTimeout time.Duration,
 	logger *slog.Logger,
 ) (*Coordinator, error) {
-	c := &Coordinator{requestTimeout: reqTimeout}
+	c := &Coordinator{
+		requestTimeout: reqTimeout,
+		clients:        make([]raftpb.RaftServiceClient, len(conns)),
+	}
 
-	for i, addr := range peerAddrs {
-		conn, err := grpc.NewClient(
-			addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-		if err != nil {
-			return nil, fmt.Errorf("dial peer %d: %w", i, err)
-		}
-		c.conns[i] = conn
+	for i, conn := range conns {
 		c.clients[i] = raftpb.NewRaftServiceClient(conn)
 	}
 
 	return c, nil
+}
+
+func (*Coordinator) Submit(ctx context.Context, cmd []byte) (*api.SubmitResult, error) {
+	return nil, nil
 }
 
 func (c *Coordinator) discoverLeader(ctx context.Context) (peerId int, err error) {
@@ -79,16 +81,4 @@ func (c *Coordinator) discoverLeader(ctx context.Context) (peerId int, err error
 	}()
 
 	return
-}
-
-func (c *Coordinator) Shutdown() error {
-	var err error
-	for i, conn := range c.conns {
-		if cerr := conn.Close(); cerr != nil {
-			err = errors.Join(
-				err,
-				fmt.Errorf("failed to close peer %d connection: %w", i, cerr))
-		}
-	}
-	return err
 }
