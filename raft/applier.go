@@ -17,7 +17,7 @@ func (rf *Raft) applier() {
 		select {
 		case <-rf.raftCtx.Done():
 			return
-		case <-rf.signalAppliererChan:
+		case <-rf.signalApplierChan:
 			for {
 				rf.mu.RLock()
 				if rf.lastAppliedIdx >= rf.commitIdx || rf.Killed() {
@@ -73,7 +73,7 @@ func (rf *Raft) applier() {
 
 func (rf *Raft) signalApplier() {
 	select {
-	case rf.signalAppliererChan <- struct{}{}:
+	case rf.signalApplierChan <- struct{}{}:
 	default:
 	}
 }

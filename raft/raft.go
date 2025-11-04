@@ -12,7 +12,6 @@ import (
 	"github.com/shrtyk/raft-core/api"
 	raftpb "github.com/shrtyk/raft-core/internal/proto/gen"
 	"github.com/shrtyk/raft-core/pkg/logger"
-	"github.com/shrtyk/raft-core/pkg/storage"
 )
 
 // A Go object implementing a single Raft peer.
@@ -39,9 +38,9 @@ type Raft struct {
 	electionTimer   *time.Timer
 	heartbeatTicker *time.Ticker
 
-	applyChan           chan *api.ApplyMessage
-	signalAppliererChan chan struct{}
-	electionDone        chan struct{}
+	applyChan         chan *api.ApplyMessage
+	signalApplierChan chan struct{}
+	electionDone      chan struct{}
 
 	// Persistent state:
 
@@ -78,53 +77,6 @@ type Raft struct {
 	grpcServer       GRPCServer
 	fsm              api.FSM
 	raftpb.UnimplementedRaftServiceServer
-}
-
-// NewRaft creates a new Raft peer
-func NewRaft(
-	cfg *api.RaftConfig,
-	me int,
-	persister api.Persister,
-	applyCh chan *api.ApplyMessage,
-	transport api.Transport,
-	fsm api.FSM,
-) (api.Raft, error) {
-	ctx, cancel := context.WithCancel(context.Background())
-
-	rf := &Raft{
-		peersCount:          transport.PeersCount(),
-		transport:           transport,
-		me:                  me,
-		applyChan:           applyCh,
-		signalAppliererChan: make(chan struct{}, 1),
-		log:                 make([]*raftpb.LogEntry, 0),
-		nextIdx:             make([]int64, transport.PeersCount()),
-		matchIdx:            make([]int64, transport.PeersCount()),
-		fsm:                 fsm,
-		raftCtx:             ctx,
-		raftCancel:          cancel,
-	}
-
-	if cfg == nil {
-		cfg = DefaultConfig()
-	}
-
-	rf.cfg = cfg
-	if cfg.Log.Env == logger.Dev {
-		_, rf.logger = logger.NewTestLogger()
-	} else {
-		rf.logger = logger.NewLogger(rf.cfg.Log.Env, false).With(slog.Int("me", me))
-	}
-
-	if persister == nil {
-		s, err := storage.NewDefaultStorage("data", rf.logger)
-		if err != nil {
-			return nil, fmt.Errorf("failed to initialize default storage: %w", err)
-		}
-		persister = s
-	}
-	rf.persister = persister
-	return rf, nil
 }
 
 func (rf *Raft) Start() error {

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/shrtyk/raft-core/api"
+	"github.com/shrtyk/raft-core/pkg/logger"
 	"github.com/shrtyk/raft-core/raft"
 	"github.com/shrtyk/raft-core/tests/harness"
 	"github.com/shrtyk/raft-core/tests/simgob"
@@ -199,10 +200,13 @@ func (ts *Test) Mksrv(ends []*simrpc.ClientEnd, grp harness.Tgid, srv int, persi
 	applyCh := make(chan *api.ApplyMessage)
 	cfg := raft.DefaultConfig()
 
-	r, err := raft.NewRaft(cfg, srv, mem_persister, applyCh, transport, nil)
-	if err != nil {
-		ts.t.Fatal(err)
-	}
+	_, l := logger.NewTestLogger()
+	r := raft.NewNodeBuilder(srv, applyCh, nil, transport).
+		WithConfig(cfg).
+		WithLogger(l).
+		WithPersister(mem_persister).
+		Build()
+
 	r.Start()
 
 	s := &rfsrv{
