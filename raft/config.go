@@ -24,5 +24,6 @@ func DefaultConfig() *api.RaftConfig {
 			RPCTimeout:                 100 * time.Millisecond,
 		},
 		HttpMonitoringAddr: defaultHttpMonitoringAddr,
+		GRPCAddr:           "",
 	}
 }

@@ -2,6 +2,7 @@ package testsim
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"log"
 	"math/rand"
@@ -201,11 +202,14 @@ func (ts *Test) Mksrv(ends []*simrpc.ClientEnd, grp harness.Tgid, srv int, persi
 	cfg := raft.DefaultConfig()
 
 	_, l := logger.NewTestLogger()
-	r, _ := raft.NewNodeBuilder(srv, applyCh, nil, transport).
+	r, err := raft.NewNodeBuilder(context.Background(), srv, applyCh, nil, transport).
 		WithConfig(cfg).
 		WithLogger(l).
 		WithPersister(mem_persister).
 		Build()
+	if err != nil {
+		ts.t.Fatalf("failed to build raft node: %v", err)
+	}
 
 	r.Start()
 

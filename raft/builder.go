@@ -13,6 +13,7 @@ import (
 
 type nodeBuilder struct {
 	// required
+	ctx       context.Context
 	me        int
 	applyCh   chan *api.ApplyMessage
 	fsm       api.FSM
@@ -25,12 +26,14 @@ type nodeBuilder struct {
 }
 
 func NewNodeBuilder(
+	ctx context.Context,
 	nodeIdx int,
 	applyCh chan *api.ApplyMessage,
 	fsm api.FSM,
 	transport api.Transport,
 ) api.NodeBuilder {
 	return &nodeBuilder{
+		ctx:       ctx,
 		me:        nodeIdx,
 		applyCh:   applyCh,
 		fsm:       fsm,
@@ -40,7 +43,7 @@ func NewNodeBuilder(
 }
 
 func (nb *nodeBuilder) Build() (api.Raft, error) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(nb.ctx)
 
 	log := nb.logger
 	if log == nil {
@@ -52,6 +55,7 @@ func (nb *nodeBuilder) Build() (api.Raft, error) {
 		var err error
 		persister, err = storage.NewDefaultStorage(fmt.Sprintf("data-%d", nb.me), log)
 		if err != nil {
+			cancel()
 			return nil, fmt.Errorf("builder: failed to create default storage: %w", err)
 		}
 	}
@@ -71,6 +75,14 @@ func (nb *nodeBuilder) Build() (api.Raft, error) {
 		log:               make([]*raftpb.LogEntry, 0),
 		nextIdx:           make([]int64, nb.transport.PeersCount()),
 		matchIdx:          make([]int64, nb.transport.PeersCount()),
+	}
+
+	if nb.cfg.GRPCAddr != "" {
+		rf.grpcServer = NewGRPCServer(rf, nb.cfg.GRPCAddr)
+	}
+
+	if nb.cfg.HttpMonitoringAddr != "" {
+		rf.monitoringServer = NewMonitoringServer(rf)
 	}
 
 	return rf, nil

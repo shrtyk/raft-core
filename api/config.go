@@ -11,6 +11,7 @@ type RaftConfig struct {
 	Log                LoggerCfg
 	Timings            RaftTimings
 	HttpMonitoringAddr string
+	GRPCAddr           string
 }
 
 // LoggerCfg holds the configuration for the logger.
