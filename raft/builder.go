@@ -39,7 +39,7 @@ func NewNodeBuilder(
 	}
 }
 
-func (nb *nodeBuilder) Build() api.Raft {
+func (nb *nodeBuilder) Build() (api.Raft, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	log := nb.logger
@@ -49,7 +49,11 @@ func (nb *nodeBuilder) Build() api.Raft {
 
 	persister := nb.persister
 	if persister == nil {
-		persister = storage.MustCreateDefaultStorage(fmt.Sprintf("data-%d", nb.me), log)
+		var err error
+		persister, err = storage.NewDefaultStorage(fmt.Sprintf("data-%d", nb.me), log)
+		if err != nil {
+			return nil, fmt.Errorf("builder: failed to create default storage: %w", err)
+		}
 	}
 
 	rf := &Raft{
@@ -69,7 +73,7 @@ func (nb *nodeBuilder) Build() api.Raft {
 		matchIdx:          make([]int64, nb.transport.PeersCount()),
 	}
 
-	return rf
+	return rf, nil
 }
 
 func (nb *nodeBuilder) WithConfig(cfg *api.RaftConfig) api.NodeBuilder {

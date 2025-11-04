@@ -1,3 +1,27 @@
+/*
+Package api defines the core public interfaces for the Raft consensus library.
+It provides the contracts that users of the library must implement and the
+primary interfaces for interacting with a Raft node.
+
+# Mandatory User Implementations
+
+To use this Raft library, you must provide implementations for the following
+interfaces:
+
+  - FSM (Finite State Machine): This is the most critical component. It represents
+    your application's logic. The Raft library guarantees that committed log
+    entries will be sent to your FSM for application.
+
+  - Transport: This interface defines how Raft nodes communicate with each other.
+    While you can provide a custom implementation (e.g., using a different RPC
+    framework), the library includes a default gRPC-based transport in the
+    `github.com/shrtyk/raft-core/pkg/transport` package that can be used out of the box.
+
+  - Persister: This interface defines how a Raft node saves its persistent state
+    (current term, voted for, and the log) to stable storage.
+    A default filesystem-based implementation is provided in the
+    `github.com/shrtyk/raft-core/pkg/storage` package.
+*/
 package api
 
 import "errors"

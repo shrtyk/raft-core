@@ -201,7 +201,7 @@ func (ts *Test) Mksrv(ends []*simrpc.ClientEnd, grp harness.Tgid, srv int, persi
 	cfg := raft.DefaultConfig()
 
 	_, l := logger.NewTestLogger()
-	r := raft.NewNodeBuilder(srv, applyCh, nil, transport).
+	r, _ := raft.NewNodeBuilder(srv, applyCh, nil, transport).
 		WithConfig(cfg).
 		WithLogger(l).
 		WithPersister(mem_persister).
