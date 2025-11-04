@@ -37,17 +37,18 @@ type DefaultStorage struct {
 	versionNames []string
 }
 
-// NewDefaultStorage creates a new DefaultStorage in the given directory.
-func NewDefaultStorage(dir string, logger *slog.Logger) (*DefaultStorage, error) {
+// MustCreateDefaultStorage must creates a new DefaultStorage
+// in the given directory or panic if something went wrong.
+func MustCreateDefaultStorage(dir string, logger *slog.Logger) *DefaultStorage {
 	versionsPath := filepath.Join(dir, versionsDirName)
 	if err := os.MkdirAll(versionsPath, 0755); err != nil {
-		return nil, err
+		panic(err)
 	}
 
 	// Restores initial versions list from the filesystem.
 	versionNames, err := restoreVersionNames(versionsPath)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 
 	return &DefaultStorage{
@@ -56,7 +57,7 @@ func NewDefaultStorage(dir string, logger *slog.Logger) (*DefaultStorage, error)
 		current:      filepath.Join(dir, currentSymlinkName),
 		versions:     versionsPath,
 		versionNames: versionNames,
-	}, nil
+	}
 }
 
 func restoreVersionNames(versionsPath string) ([]string, error) {
