@@ -43,6 +43,10 @@ func NewNodeBuilder(
 }
 
 func (nb *nodeBuilder) Build() (api.Raft, error) {
+	if err := validateTimings(nb.cfg); err != nil {
+		return nil, err
+	}
+
 	ctx, cancel := context.WithCancel(nb.ctx)
 
 	log := nb.logger
@@ -101,4 +105,15 @@ func (nb *nodeBuilder) WithLogger(l *slog.Logger) api.NodeBuilder {
 func (nb *nodeBuilder) WithPersister(p api.Persister) api.NodeBuilder {
 	nb.persister = p
 	return nb
+}
+
+func validateTimings(cfg *api.RaftConfig) error {
+	if cfg.Timings.HeartbeatTimeout >= cfg.Timings.ElectionTimeoutBase {
+		return fmt.Errorf(
+			"builder: HeartbeatTimeout (%s) must be less than ElectionTimeoutBase (%s)",
+			cfg.Timings.HeartbeatTimeout,
+			cfg.Timings.ElectionTimeoutBase,
+		)
+	}
+	return nil
 }
