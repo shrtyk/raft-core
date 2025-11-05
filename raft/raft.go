@@ -34,9 +34,10 @@ type Raft struct {
 	// Lock to provide atomic timers updates.
 	//
 	// lock timerMu -> stop one of the timers -> reser another one -> unlock timerMu
-	timerMu         sync.Mutex
-	electionTimer   *time.Timer
-	heartbeatTicker *time.Ticker
+	timerMu                   sync.Mutex
+	electionTimer             *time.Timer
+	heartbeatTicker           *time.Ticker
+	lastHeartbeatMajorityTime time.Time
 
 	applyChan         chan *api.ApplyMessage
 	signalApplierChan chan struct{}

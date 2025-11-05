@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"slices"
+	"time"
 
 	raftpb "github.com/shrtyk/raft-core/internal/proto/gen"
 	"github.com/shrtyk/raft-core/pkg/logger"
@@ -140,6 +141,7 @@ func (rf *Raft) tryToCommit() {
 			"new_commit_idx", newCommitIdx,
 		)
 		rf.commitIdx = newCommitIdx
+		rf.lastHeartbeatMajorityTime = time.Now()
 	}
 }
 
