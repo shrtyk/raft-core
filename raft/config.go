@@ -23,6 +23,10 @@ func DefaultConfig() *api.RaftConfig {
 			ShutdownTimeout:            3 * time.Second,
 			RPCTimeout:                 100 * time.Millisecond,
 		},
+		Snapshots: api.SnapshotsCfg{
+			CheckLogSizeInterval: 30 * time.Second,
+			ThresholdBytes:       0,
+		},
 		HttpMonitoringAddr: defaultHttpMonitoringAddr,
 		GRPCAddr:           "",
 	}

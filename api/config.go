@@ -12,6 +12,7 @@ type RaftConfig struct {
 	Timings            RaftTimings
 	HttpMonitoringAddr string
 	GRPCAddr           string
+	Snapshots          SnapshotsCfg
 }
 
 // LoggerCfg holds the configuration for the logger.
@@ -26,4 +27,9 @@ type RaftTimings struct {
 	HeartbeatTimeout           time.Duration
 	RPCTimeout                 time.Duration
 	ShutdownTimeout            time.Duration
+}
+
+type SnapshotsCfg struct {
+	CheckLogSizeInterval time.Duration
+	ThresholdBytes       int
 }
