@@ -111,3 +111,11 @@ func (rf *Raft) initializeNextIndexes() {
 		rf.nextIdx[i] = lastLogIdx + 1
 	}
 }
+
+func (rf *Raft) calculateLogSizeInBytes() int {
+	size := 0
+	for _, entry := range rf.log {
+		size += len(entry.Cmd)
+	}
+	return size
+}

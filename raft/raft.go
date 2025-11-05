@@ -44,9 +44,10 @@ type Raft struct {
 
 	// Persistent state:
 
-	curTerm  int64              // latest term server has seen
-	votedFor int64              // index of peer in peers
-	log      []*raftpb.LogEntry // log entries
+	curTerm        int64              // latest term server has seen
+	votedFor       int64              // index of peer in peers
+	log            []*raftpb.LogEntry // log entries
+	logSizeInBytes int
 
 	// Volatile state on all servers:
 
@@ -85,6 +86,7 @@ func (rf *Raft) Start() error {
 		return fmt.Errorf("failed to read peer #%d state: %w", rf.me, err)
 	}
 	rf.restoreState(state)
+	rf.logSizeInBytes = rf.calculateLogSizeInBytes()
 	rf.initializeNextIndexes()
 	rf.electionTimer = time.NewTimer(rf.randElectionInterval())
 	rf.heartbeatTicker = time.NewTicker(rf.cfg.Timings.HeartbeatTimeout)
@@ -149,6 +151,7 @@ func (rf *Raft) Submit(command []byte) (int64, int64, bool) {
 		Term: rf.curTerm,
 		Cmd:  command,
 	})
+	rf.logSizeInBytes += len(command)
 	lastLogIdx, _ := rf.lastLogIdxAndTerm()
 	rf.matchIdx[rf.me] = lastLogIdx
 	rf.nextIdx[rf.me] = lastLogIdx + 1

@@ -21,6 +21,8 @@ func (rf *Raft) Snapshot(index int64, snapshot []byte) error {
 		rf.log = nil
 	}
 
+	rf.logSizeInBytes = rf.calculateLogSizeInBytes()
+
 	rf.lastIncludedIndex = index
 	rf.lastIncludedTerm = term
 
