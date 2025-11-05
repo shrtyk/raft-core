@@ -109,6 +109,12 @@ func (rf *Raft) Start() error {
 	go rf.applier()
 	go rf.ticker()
 
+	// Workaround which allows to make snapshots manually in test environment
+	if rf.cfg.Snapshots.ThresholdBytes > 0 {
+		rf.wg.Add(1)
+		go rf.snapshotter()
+	}
+
 	return nil
 }
 
