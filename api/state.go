@@ -8,7 +8,7 @@ import "context"
 // The application using Raft must implement this interface.
 type FSM interface {
 	Start(ctx context.Context)         // Run a long-lived goroutine consuming ApplyMessages
-	Snapshot() ([]byte, error)         // Serialize the current application state
+	Snapshot() ([]byte, int64, error)  // Serialize the current application state
 	Restore(snapshot []byte) error     // Restore application state from snapshot
 	Read(query []byte) ([]byte, error) // Read data from the state machine
 }

@@ -112,6 +112,7 @@ func (rf *Raft) initializeNextIndexes() {
 	}
 }
 
+// Assumes the lock is held when called, unless it is the raft.Start() function
 func (rf *Raft) calculateLogSizeInBytes() int {
 	size := 0
 	for _, entry := range rf.log {

@@ -34,7 +34,6 @@ func (rf *Raft) snapshotter() {
 func (rf *Raft) checkAndTakeSnapshot() {
 	rf.mu.RLock()
 	size := rf.logSizeInBytes
-	lastApplied := rf.lastAppliedIdx
 	rf.mu.RUnlock()
 
 	if size < rf.cfg.Snapshots.ThresholdBytes {
@@ -46,7 +45,7 @@ func (rf *Raft) checkAndTakeSnapshot() {
 		slog.Int("size", size),
 		slog.Int("threshold", rf.cfg.Snapshots.ThresholdBytes))
 
-	snapshotData, err := rf.fsm.Snapshot()
+	snapshotData, lastApplied, err := rf.fsm.Snapshot()
 	if err != nil {
 		rf.logger.Warn("failed to get snapshot from FSM", logger.ErrAttr(err))
 		return
