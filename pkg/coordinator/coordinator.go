@@ -14,6 +14,8 @@ import (
 	"google.golang.org/grpc"
 )
 
+const staleLeader = -1
+
 var _ api.Coordinator = (*Coordinator)(nil)
 
 type Coordinator struct {
@@ -32,7 +34,7 @@ func NewCoordinator(
 	c := &Coordinator{
 		requestTimeout: reqTimeout,
 		clients:        make([]raftpb.RaftServiceClient, len(conns)),
-		leaderId:       -1,
+		leaderId:       staleLeader,
 	}
 
 	for i, conn := range conns {
@@ -46,7 +48,7 @@ func (c *Coordinator) Submit(ctx context.Context, cmd []byte) (*api.SubmitResult
 	var result *api.SubmitResult
 
 	err := retry.Do(ctx, func(ctx context.Context) error {
-		if c.leaderId == -1 {
+		if c.leaderId == staleLeader {
 			leader, err := c.discoverLeader(ctx)
 			if err != nil {
 				c.logger.Warn("failed to discover leader", logger.ErrAttr(err))
@@ -63,7 +65,7 @@ func (c *Coordinator) Submit(ctx context.Context, cmd []byte) (*api.SubmitResult
 				slog.Int("leader_id", c.leaderId),
 				logger.ErrAttr(err),
 			)
-			c.leaderId = -1
+			c.leaderId = staleLeader
 			return err
 		}
 
@@ -79,7 +81,7 @@ func (c *Coordinator) Submit(ctx context.Context, cmd []byte) (*api.SubmitResult
 				"contacted node is not leader, retrying",
 				slog.Int("node_id", c.leaderId),
 			)
-			c.leaderId = -1
+			c.leaderId = staleLeader
 			return errors.New("not leader, retrying")
 		}
 	})
@@ -89,6 +91,51 @@ func (c *Coordinator) Submit(ctx context.Context, cmd []byte) (*api.SubmitResult
 	}
 
 	return result, nil
+}
+
+func (c *Coordinator) Read(ctx context.Context, query []byte) ([]byte, error) {
+	var data []byte
+
+	err := retry.Do(ctx, func(ctx context.Context) error {
+		if c.leaderId == staleLeader {
+			leader, err := c.discoverLeader(ctx)
+			if err != nil {
+				c.logger.Warn("failed to discover leader", logger.ErrAttr(err))
+				return err
+			}
+			c.leaderId = leader
+		}
+
+		req := &raftpb.ReadOnlyRequest{Query: query}
+		resp, err := c.clients[c.leaderId].ReadOnly(ctx, req)
+		if err != nil {
+			c.logger.Warn(
+				"failed to send read-only to leader",
+				slog.Int("leader_id", c.leaderId),
+				logger.ErrAttr(err),
+			)
+			c.leaderId = staleLeader
+			return err
+		}
+
+		if resp.IsLeader {
+			data = resp.Data
+			return nil
+		} else {
+			c.logger.Debug(
+				"contacted node is not leader for read-only, retrying",
+				slog.Int("node_id", c.leaderId),
+			)
+			c.leaderId = staleLeader
+			return errors.New("not leader, retrying")
+		}
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return data, nil
 }
 
 func (c *Coordinator) discoverLeader(ctx context.Context) (peerId int, err error) {
