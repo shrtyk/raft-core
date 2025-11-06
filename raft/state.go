@@ -64,6 +64,10 @@ func (rf *Raft) becomeLeader() {
 		rf.matchIdx[i] = 0
 	}
 	rf.matchIdx[rf.me] = lastLogIdx
+
+	if rf.cfg.CommitNoOpOn {
+		go rf.Submit(nil)
+	}
 }
 
 // checkOrUpdateTerm validates the term from an RPC reply.

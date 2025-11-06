@@ -26,12 +26,15 @@ func (rf *Raft) applier() {
 				}
 
 				var msg api.ApplyMessage
+				shouldSendToApplyChan := false
+
 				if rf.lastAppliedIdx < rf.lastIncludedIndex {
 					rf.logger.Debug("applying snapshot to state machine", "index", rf.lastIncludedIndex)
 
 					snapshot, err := rf.persister.ReadSnapshot()
 					if err != nil {
 						rf.logger.Warn("failed to read snapshot", logger.ErrAttr(err))
+						rf.mu.RUnlock()
 						continue
 					}
 
@@ -41,22 +44,34 @@ func (rf *Raft) applier() {
 						SnapshotTerm:  rf.lastIncludedTerm,
 						SnapshotIndex: rf.lastIncludedIndex,
 					}
+					shouldSendToApplyChan = true
 				} else {
 					applyIdx := rf.lastAppliedIdx + 1
-					rf.logger.Debug("applying command to state machine", "index", applyIdx)
 					sliceIdx := applyIdx - rf.lastIncludedIndex - 1
+
+					if rf.log[sliceIdx].Cmd == nil {
+						rf.logger.Debug("skipping no-op entry", "index", applyIdx)
+						rf.lastAppliedIdx = applyIdx
+						rf.mu.RUnlock()
+						continue
+					}
+
+					rf.logger.Debug("applying command to state machine", "index", applyIdx)
 					msg = api.ApplyMessage{
 						CommandValid: true,
 						Command:      rf.log[sliceIdx].Cmd,
 						CommandIndex: applyIdx,
 					}
+					shouldSendToApplyChan = true
 				}
 				rf.mu.RUnlock()
 
-				select {
-				case <-rf.raftCtx.Done():
-					return
-				case rf.applyChan <- &msg:
+				if shouldSendToApplyChan {
+					select {
+					case <-rf.raftCtx.Done():
+						return
+					case rf.applyChan <- &msg:
+					}
 				}
 
 				rf.mu.Lock()

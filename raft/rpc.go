@@ -2,6 +2,7 @@ package raft
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	raftpb "github.com/shrtyk/raft-core/internal/proto/gen"
