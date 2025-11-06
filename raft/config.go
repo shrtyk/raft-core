@@ -9,7 +9,10 @@ import (
 
 const votedForNone = -1
 
-const defaultHttpMonitoringAddr = "localhost:12321"
+const (
+	defaultHttpMonitoringAddr = ""
+	defaultGRPCAddr           = ""
+)
 
 func DefaultConfig() *api.RaftConfig {
 	return &api.RaftConfig{
@@ -28,7 +31,7 @@ func DefaultConfig() *api.RaftConfig {
 			ThresholdBytes:       0,
 		},
 		HttpMonitoringAddr: defaultHttpMonitoringAddr,
-		GRPCAddr:           "",
+		GRPCAddr:           defaultGRPCAddr,
 		CommitNoOpOn:       true,
 	}
 }
