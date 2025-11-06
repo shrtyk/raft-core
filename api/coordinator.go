@@ -8,6 +8,8 @@ type Coordinator interface {
 	// Submit proposes a command to the Raft cluster. It finds the leader,
 	// submits the command, and retries if the leader changes.
 	Submit(ctx context.Context, cmd []byte) (*SubmitResult, error)
+	// Read performs a linearizable read from the Raft cluster.
+	Read(ctx context.Context, query []byte) ([]byte, error)
 }
 
 // SubmitResult holds the result of a successful command submission.
