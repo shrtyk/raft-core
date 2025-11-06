@@ -15,7 +15,9 @@ func (rf *Raft) RequestVote(ctx context.Context,
 
 	rf.mu.Lock()
 	defer func() {
-		rf.unlockConditionally(needToPersist, nil)
+		if pErr := rf.unlockConditionally(needToPersist, nil); pErr != nil {
+			rf.handlePersistenceError("RequestVote", pErr)
+		}
 	}()
 
 	reply.VoteGranted = false
@@ -80,7 +82,10 @@ func (rf *Raft) AppendEntries(ctx context.Context,
 
 	rf.mu.Lock()
 	defer func() {
-		rf.unlockConditionally(needToPersist, nil)
+		if pErr := rf.unlockConditionally(needToPersist, nil); pErr != nil {
+			rf.handlePersistenceError("AppendEntries", pErr)
+			return
+		}
 		if shouldSignalApplier {
 			rf.signalApplier()
 		}
@@ -145,7 +150,10 @@ func (rf *Raft) InstallSnapshot(ctx context.Context,
 
 	rf.mu.Lock()
 	defer func() {
-		rf.unlockConditionally(needToPersist, snapshotData)
+		if pErr := rf.unlockConditionally(needToPersist, snapshotData); pErr != nil {
+			rf.handlePersistenceError("InstallSnapshot", pErr)
+			return
+		}
 		if shouldSignalApplier {
 			rf.signalApplier()
 		}

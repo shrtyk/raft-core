@@ -1,6 +1,8 @@
 package raft
 
 import (
+	"log/slog"
+
 	raftpb "github.com/shrtyk/raft-core/internal/proto/gen"
 	"github.com/shrtyk/raft-core/pkg/logger"
 	"google.golang.org/protobuf/proto"
@@ -45,12 +47,15 @@ func (rf *Raft) persistAndUnlock(snapshot []byte) error {
 // unlockConditionally unlocks the main mutex, and persists the state if needed
 //
 // It must be called with rf.mu held, and it will unlock it
-func (rf *Raft) unlockConditionally(needToPersist bool, snapshot []byte) {
+func (rf *Raft) unlockConditionally(needToPersist bool, snapshot []byte) error {
 	if needToPersist {
-		rf.persistAndUnlock(snapshot)
+		if err := rf.persistAndUnlock(snapshot); err != nil {
+			return err
+		}
 	} else {
 		rf.mu.Unlock()
 	}
+	return nil
 }
 
 // restoreState restores previously persisted state from data
@@ -78,4 +83,13 @@ func (rf *Raft) restoreState(data []byte) {
 
 func (rf *Raft) PersistedStateSize() (int, error) {
 	return rf.persister.RaftStateSize()
+}
+
+func (rf *Raft) handlePersistenceError(rpcName string, err error) {
+	rf.logger.Error(
+		"CRITICAL: failed to persist state, shutting down",
+		slog.String("rpc", rpcName),
+		logger.ErrAttr(err),
+	)
+	rf.Stop()
 }
