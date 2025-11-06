@@ -13,6 +13,7 @@ type RaftConfig struct {
 	HttpMonitoringAddr string
 	GRPCAddr           string
 	Snapshots          SnapshotsCfg
+	CommitNoOpOn       bool
 }
 
 // LoggerCfg holds the configuration for the logger.
@@ -20,7 +21,7 @@ type LoggerCfg struct {
 	Env logger.Enviroment
 }
 
-// RaftTimings holds various timing and timeout settings for the Raft algorithm.
+// RaftTimings holds various timings and timeouts settings for the Raft algorithm.
 type RaftTimings struct {
 	ElectionTimeoutBase        time.Duration
 	ElectionTimeoutRandomDelta time.Duration

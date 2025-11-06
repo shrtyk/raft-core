@@ -29,5 +29,26 @@ func DefaultConfig() *api.RaftConfig {
 		},
 		HttpMonitoringAddr: defaultHttpMonitoringAddr,
 		GRPCAddr:           "",
+		CommitNoOpOn:       true,
+	}
+}
+
+func TestsConfig() *api.RaftConfig {
+	return &api.RaftConfig{
+		Log: api.LoggerCfg{
+			Env: logger.Dev,
+		},
+		Timings: api.RaftTimings{
+			ElectionTimeoutBase:        150 * time.Millisecond,
+			ElectionTimeoutRandomDelta: 150 * time.Millisecond,
+			HeartbeatTimeout:           60 * time.Millisecond,
+			ShutdownTimeout:            3 * time.Second,
+			RPCTimeout:                 100 * time.Millisecond,
+		},
+		Snapshots: api.SnapshotsCfg{
+			CheckLogSizeInterval: 30 * time.Second,
+			ThresholdBytes:       0,
+		},
+		CommitNoOpOn: false,
 	}
 }

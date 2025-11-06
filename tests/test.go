@@ -199,7 +199,7 @@ func (ts *Test) Mksrv(ends []*simrpc.ClientEnd, grp harness.Tgid, srv int, persi
 	transport := NewSimTransport(ends)
 
 	applyCh := make(chan *api.ApplyMessage)
-	cfg := raft.DefaultConfig()
+	cfg := raft.TestsConfig()
 
 	_, l := logger.NewTestLogger()
 	r, err := raft.NewNodeBuilder(context.Background(), srv, applyCh, nil, transport).
