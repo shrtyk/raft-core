@@ -24,6 +24,7 @@ const (
 	RaftService_AppendEntries_FullMethodName   = "/raft.v1.RaftService/AppendEntries"
 	RaftService_IsLeader_FullMethodName        = "/raft.v1.RaftService/IsLeader"
 	RaftService_SubmitCommand_FullMethodName   = "/raft.v1.RaftService/SubmitCommand"
+	RaftService_ReadOnly_FullMethodName        = "/raft.v1.RaftService/ReadOnly"
 )
 
 // RaftServiceClient is the client API for RaftService service.
@@ -35,6 +36,7 @@ type RaftServiceClient interface {
 	AppendEntries(ctx context.Context, in *AppendEntriesRequest, opts ...grpc.CallOption) (*AppendEntriesResponse, error)
 	IsLeader(ctx context.Context, in *IsLeaderRequest, opts ...grpc.CallOption) (*IsLeaderResponse, error)
 	SubmitCommand(ctx context.Context, in *SubmitRequest, opts ...grpc.CallOption) (*SubmitResponse, error)
+	ReadOnly(ctx context.Context, in *ReadOnlyRequest, opts ...grpc.CallOption) (*ReadOnlyResponse, error)
 }
 
 type raftServiceClient struct {
@@ -95,6 +97,16 @@ func (c *raftServiceClient) SubmitCommand(ctx context.Context, in *SubmitRequest
 	return out, nil
 }
 
+func (c *raftServiceClient) ReadOnly(ctx context.Context, in *ReadOnlyRequest, opts ...grpc.CallOption) (*ReadOnlyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReadOnlyResponse)
+	err := c.cc.Invoke(ctx, RaftService_ReadOnly_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // RaftServiceServer is the server API for RaftService service.
 // All implementations must embed UnimplementedRaftServiceServer
 // for forward compatibility.
@@ -104,6 +116,7 @@ type RaftServiceServer interface {
 	AppendEntries(context.Context, *AppendEntriesRequest) (*AppendEntriesResponse, error)
 	IsLeader(context.Context, *IsLeaderRequest) (*IsLeaderResponse, error)
 	SubmitCommand(context.Context, *SubmitRequest) (*SubmitResponse, error)
+	ReadOnly(context.Context, *ReadOnlyRequest) (*ReadOnlyResponse, error)
 	mustEmbedUnimplementedRaftServiceServer()
 }
 
@@ -128,6 +141,9 @@ func (UnimplementedRaftServiceServer) IsLeader(context.Context, *IsLeaderRequest
 }
 func (UnimplementedRaftServiceServer) SubmitCommand(context.Context, *SubmitRequest) (*SubmitResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SubmitCommand not implemented")
+}
+func (UnimplementedRaftServiceServer) ReadOnly(context.Context, *ReadOnlyRequest) (*ReadOnlyResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReadOnly not implemented")
 }
 func (UnimplementedRaftServiceServer) mustEmbedUnimplementedRaftServiceServer() {}
 func (UnimplementedRaftServiceServer) testEmbeddedByValue()                     {}
@@ -240,6 +256,24 @@ func _RaftService_SubmitCommand_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _RaftService_ReadOnly_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReadOnlyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RaftServiceServer).ReadOnly(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RaftService_ReadOnly_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RaftServiceServer).ReadOnly(ctx, req.(*ReadOnlyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // RaftService_ServiceDesc is the grpc.ServiceDesc for RaftService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -266,6 +300,10 @@ var RaftService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SubmitCommand",
 			Handler:    _RaftService_SubmitCommand_Handler,
+		},
+		{
+			MethodName: "ReadOnly",
+			Handler:    _RaftService_ReadOnly_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
