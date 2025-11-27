@@ -8,7 +8,7 @@ import (
 	"github.com/shrtyk/raft-core/api"
 	raftpb "github.com/shrtyk/raft-core/internal/proto/gen"
 	"github.com/shrtyk/raft-core/pkg/logger"
-	"github.com/shrtyk/raft-core/pkg/storage"
+	"github.com/shrtyk/raft-core/storage"
 )
 
 type nodeBuilder struct {
