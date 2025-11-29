@@ -201,37 +201,6 @@ func (rf *Raft) InstallSnapshot(ctx context.Context,
 	return
 }
 
-func (rf *Raft) SubmitCommand(ctx context.Context, req *raftpb.SubmitRequest) (*raftpb.SubmitResponse, error) {
-	index, term, isLeader := rf.Submit(req.Command)
-	return &raftpb.SubmitResponse{
-		Index:    index,
-		Term:     term,
-		IsLeader: isLeader,
-	}, nil
-}
-
-func (rf *Raft) IsLeader(ctx context.Context, req *raftpb.IsLeaderRequest) (*raftpb.IsLeaderResponse, error) {
-	rf.mu.RLock()
-	defer rf.mu.RUnlock()
-
-	isLeader := rf.isState(leader)
-	if isLeader {
-		// Check if the leader lease is still valid
-		// The lease is valid if the last successful heartbeat to a majority
-		// happened recently enough.
-		leaseDuration := rf.cfg.Timings.HeartbeatTimeout
-		if time.Since(rf.lastHeartbeatMajorityTime) > leaseDuration {
-			isLeader = false
-			rf.logger.Debug("leader lease expired", "time_since_last_majority_heartbeat", time.Since(rf.lastHeartbeatMajorityTime))
-		}
-	}
-
-	return &raftpb.IsLeaderResponse{
-		PeerId:   int64(rf.me),
-		IsLeader: isLeader,
-	}, nil
-}
-
 func (rf *Raft) ReadOnly(ctx context.Context, req *raftpb.ReadOnlyRequest) (*raftpb.ReadOnlyResponse, error) {
 	rf.mu.RLock()
 	isLeader := rf.isState(leader)

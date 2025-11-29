@@ -47,7 +47,7 @@ type Raft interface {
 	// to leader.
 	//
 	// This is non blocking call.
-	Submit(command []byte) (index int64, term int64, isLeader bool)
+	Submit(command []byte) *SubmitResult
 
 	// State returns the current term and whether this peer believes it is the leader.
 	State() (int64, bool)
@@ -71,4 +71,11 @@ type Raft interface {
 	// Killed returns true if peers has been stoped.
 	// Typically used by tests.
 	Killed() bool
+}
+
+// SubmitResult holds the result of a successful command submission.
+type SubmitResult struct {
+	LogIndex int64
+	Term     int64
+	IsLeader bool
 }

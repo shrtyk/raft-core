@@ -144,16 +144,19 @@ func (rf *Raft) Stop() error {
 }
 
 // Submit proposes a new command to be replicated
-func (rf *Raft) Submit(command []byte) (int64, int64, bool) {
+func (rf *Raft) Submit(command []byte) *api.SubmitResult {
+	res := &api.SubmitResult{
+		LogIndex: -1,
+	}
 	rf.mu.Lock()
 
 	if !rf.isState(leader) {
-		term := rf.curTerm
+		res.Term = rf.curTerm
 		rf.mu.Unlock()
-		return -1, term, false
+		return res
 	}
 
-	term := rf.curTerm
+	res.Term = rf.curTerm
 	rf.log = append(rf.log, &raftpb.LogEntry{
 		Term: rf.curTerm,
 		Cmd:  command,
@@ -169,14 +172,15 @@ func (rf *Raft) Submit(command []byte) (int64, int64, bool) {
 		rf.logger.Warn("failed to persist log, stepping down as leader", logger.ErrAttr(err))
 
 		rf.mu.Lock()
-		if rf.curTerm == term && rf.isState(leader) {
-			rf.becomeFollower(term)
+		if rf.curTerm == res.Term && rf.isState(leader) {
+			rf.becomeFollower(res.Term)
 		}
 		rf.mu.Unlock()
-		return -1, term, false
+		return res
 	}
-
+	res.LogIndex = lastLogIdx
+	res.IsLeader = true
 	go rf.sendSnapshotOrEntries()
 
-	return lastLogIdx, term, true
+	return res
 }
