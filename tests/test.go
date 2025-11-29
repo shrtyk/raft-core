@@ -429,7 +429,8 @@ func (ts *Test) One(cmd any, expectedServers int, retry bool) int {
 				wrappedCmd := Command{Data: cmd}
 				e.Encode(wrappedCmd)
 				cmdBytes := w.Bytes()
-				index1, _, ok := rf.Submit(cmdBytes)
+				sr := rf.Submit(cmdBytes)
+				index1, ok := sr.LogIndex, sr.IsLeader
 
 				if ok {
 					index = int(index1)

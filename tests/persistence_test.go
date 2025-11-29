@@ -143,8 +143,8 @@ func TestFigure8_3C(t *testing.T) {
 				e := simgob.NewEncoder(w)
 				e.Encode(Command{Data: rand.Int()})
 				cmdBytes := w.Bytes()
-				_, _, ok := ts.srvs[i].raft.Submit(cmdBytes)
-				if ok {
+				sr := ts.srvs[i].raft.Submit(cmdBytes)
+				if sr.IsLeader {
 					leader = i
 				}
 			}
@@ -232,8 +232,8 @@ func TestFigure8Unreliable_3C(t *testing.T) {
 				e := simgob.NewEncoder(w)
 				e.Encode(Command{Data: rand.Int()})
 				cmdBytes := w.Bytes()
-				_, _, ok := ts.srvs[i].raft.Submit(cmdBytes)
-				if ok {
+				sr := ts.srvs[i].raft.Submit(cmdBytes)
+				if sr.IsLeader {
 					leader = i
 				}
 			}

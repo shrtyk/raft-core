@@ -70,7 +70,8 @@ func TestFollowerFailure_3B(t *testing.T) {
 	e := simgob.NewEncoder(w)
 	e.Encode(Command{Data: 104})
 	cmdBytes := w.Bytes()
-	index, _, ok := ts.srvs[leader2].raft.Submit(cmdBytes)
+	sr := ts.srvs[leader2].raft.Submit(cmdBytes)
+	index, ok := sr.LogIndex, sr.IsLeader
 	if ok != true {
 		t.Fatalf("leader rejected Submit()")
 	}
@@ -181,7 +182,8 @@ func TestFailNoAgree_3B(t *testing.T) {
 	e := simgob.NewEncoder(w)
 	e.Encode(Command{Data: 20})
 	cmdBytes := w.Bytes()
-	index, _, ok := ts.srvs[leader].raft.Submit(cmdBytes)
+	sr1 := ts.srvs[leader].raft.Submit(cmdBytes)
+	index, ok := sr1.LogIndex, sr1.IsLeader
 	if ok != true {
 		t.Fatalf("leader rejected Submit()")
 	}
@@ -210,7 +212,8 @@ func TestFailNoAgree_3B(t *testing.T) {
 	e = simgob.NewEncoder(w)
 	e.Encode(Command{Data: 30})
 	cmdBytes = w.Bytes()
-	index2, _, ok2 := ts.srvs[leader2].raft.Submit(cmdBytes)
+	sr2 := ts.srvs[leader2].raft.Submit(cmdBytes)
+	index2, ok2 := sr2.LogIndex, sr2.IsLeader
 	if ok2 == false {
 		t.Fatalf("leader2 rejected Submit()")
 	}
@@ -245,7 +248,8 @@ loop:
 		e := simgob.NewEncoder(w)
 		e.Encode(Command{Data: 1})
 		cmdBytes := w.Bytes()
-		_, term, ok := ts.srvs[leader].raft.Submit(cmdBytes)
+		sr1 := ts.srvs[leader].raft.Submit(cmdBytes)
+		term, ok := sr1.Term, sr1.IsLeader
 
 		despretry := "concurrent submission failed; retry"
 		if !ok {
@@ -266,7 +270,8 @@ loop:
 				e := simgob.NewEncoder(w)
 				e.Encode(Command{Data: 100 + i})
 				cmdBytes := w.Bytes()
-				index, term1, ok := ts.srvs[leader].raft.Submit(cmdBytes)
+				sr := ts.srvs[leader].raft.Submit(cmdBytes)
+				index, term1, ok := sr.LogIndex, sr.Term, sr.IsLeader
 				if term1 != term {
 					return
 				}
@@ -539,7 +544,8 @@ loop:
 		e_first := simgob.NewEncoder(w_first)
 		e_first.Encode(Command{Data: 1})
 		cmdBytes_first := w_first.Bytes()
-		starti, term, ok := ts.srvs[leader].raft.Submit(cmdBytes_first)
+		sr := ts.srvs[leader].raft.Submit(cmdBytes_first)
+		starti, term, ok := sr.LogIndex, sr.Term, sr.IsLeader
 		despretry := "submission failed; retry"
 		if !ok {
 			// leader moved on really quickly
@@ -556,7 +562,8 @@ loop:
 			e_loop := simgob.NewEncoder(w_loop)
 			e_loop.Encode(Command{Data: x})
 			cmdBytes_loop := w_loop.Bytes()
-			index1, term1, ok := ts.srvs[leader].raft.Submit(cmdBytes_loop)
+			sr := ts.srvs[leader].raft.Submit(cmdBytes_loop)
+			index1, term1, ok := sr.LogIndex, sr.Term, sr.IsLeader
 			if term1 != term {
 				// Term changed while starting
 				details := fmt.Sprintf("term of the leader (%v) changed from %v to %v",
