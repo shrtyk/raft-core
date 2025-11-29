@@ -8,8 +8,6 @@ service RaftService {
   rpc InstallSnapshot(InstallSnapshotRequest) returns (InstallSnapshotResponse);
   rpc RequestVote(RequestVoteRequest) returns (RequestVoteResponse);
   rpc AppendEntries(AppendEntriesRequest) returns (AppendEntriesResponse);
-  rpc IsLeader(IsLeaderRequest) returns (IsLeaderResponse);
-  rpc SubmitCommand(SubmitRequest) returns (SubmitResponse);
   rpc ReadOnly(ReadOnlyRequest) returns (ReadOnlyResponse);
 }
 
@@ -65,25 +63,10 @@ message AppendEntriesResponse {
   int64 ConflictTerm = 4;
 }
 
-message IsLeaderRequest {}
-message IsLeaderResponse {
-  int64 PeerId = 1;
-  bool IsLeader = 2;
-}
-
-message SubmitRequest { bytes Command = 1; }
-
-message SubmitResponse {
-  int64 Index = 1;
-  int64 Term = 2;
-  bool IsLeader = 3;
-}
-
-message ReadOnlyRequest {
-  bytes Query = 1;
-}
+message ReadOnlyRequest { bytes Query = 1; }
 
 message ReadOnlyResponse {
   bytes Data = 1;
   bool IsLeader = 2;
+  int64 LeaderId = 3;
 }
