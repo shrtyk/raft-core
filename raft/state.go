@@ -41,6 +41,7 @@ func (rf *Raft) isState(state State) bool {
 func (rf *Raft) becomeFollower(term int64) (needToPersist bool) {
 	rf.logger.Info("transitioning to follower", "term", term)
 	atomic.StoreUint32(&rf.state, follower)
+	rf.leaderId = -1
 	if term > rf.curTerm {
 		rf.curTerm = term
 		rf.votedFor = votedForNone
@@ -58,6 +59,7 @@ func (rf *Raft) becomeLeader() {
 	atomic.StoreUint32(&rf.state, leader)
 	rf.resetHeartbeatTicker()
 
+	rf.leaderId = rf.me
 	lastLogIdx, _ := rf.lastLogIdxAndTerm()
 	for i := range rf.peersCount {
 		rf.nextIdx[i] = lastLogIdx + 1

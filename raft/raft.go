@@ -26,6 +26,7 @@ type Raft struct {
 	transport  api.Transport // RPC clients layer abstraction
 	persister  api.Persister // Persistence layer abstraction (should be concurrent safe)
 	me         int           // this peer's index
+	leaderId   int           // ID of the current leader
 	dead       int32         // set by Stop()
 
 	state State           // State of the peer
@@ -152,11 +153,13 @@ func (rf *Raft) Submit(command []byte) *api.SubmitResult {
 
 	if !rf.isState(leader) {
 		res.Term = rf.curTerm
+		res.LeaderID = rf.leaderId
 		rf.mu.Unlock()
 		return res
 	}
 
 	res.Term = rf.curTerm
+	res.LeaderID = rf.me
 	rf.log = append(rf.log, &raftpb.LogEntry{
 		Term: rf.curTerm,
 		Cmd:  command,

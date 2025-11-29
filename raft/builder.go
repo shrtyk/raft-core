@@ -68,6 +68,7 @@ func (nb *nodeBuilder) Build() (api.Raft, error) {
 		raftCtx:           ctx,
 		raftCancel:        cancel,
 		me:                nb.me,
+		leaderId:          -1,
 		peersCount:        nb.transport.PeersCount(),
 		applyChan:         nb.applyCh,
 		fsm:               nb.fsm,

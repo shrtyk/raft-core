@@ -78,4 +78,5 @@ type SubmitResult struct {
 	LogIndex int64
 	Term     int64
 	IsLeader bool
+	LeaderID int
 }
