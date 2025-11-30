@@ -237,6 +237,7 @@ func (rf *Raft) ReadOnly(ctx context.Context, req *raftpb.ReadOnlyRequest) (*raf
 		select {
 		case <-tctx.Done():
 			return nil, fmt.Errorf("timeout waiting for state machine to catch up for read at commit index %d: %w", commitIndex, tctx.Err())
+		// TODO configurable
 		case <-time.After(5 * time.Millisecond):
 			continue
 		}

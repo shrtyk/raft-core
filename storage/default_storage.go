@@ -19,7 +19,7 @@ const (
 	snapshotFileName   = "snapshot.bin"
 	versionsDirName    = "versions"
 	currentSymlinkName = "current"
-	versionsToKeep     = 2
+	versionsToKeep     = 2 // TODO configurable
 )
 
 var _ api.Persister = (*DefaultStorage)(nil)

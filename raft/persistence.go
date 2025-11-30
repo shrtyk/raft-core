@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"fmt"
 	"log/slog"
 
 	raftpb "github.com/shrtyk/raft-core/internal/proto/gen"
@@ -85,11 +86,17 @@ func (rf *Raft) PersistedStateSize() (int, error) {
 	return rf.persister.RaftStateSize()
 }
 
+// handlePersistenceError logs error and immediately panics
 func (rf *Raft) handlePersistenceError(rpcName string, err error) {
+	errMsg := fmt.Sprintf(
+		"CRITICAL: failed to persist state in '%s'. The node's state is now corrupted! Shutting down to prevent further inconsistency. Error: %v",
+		rpcName,
+		err,
+	)
 	rf.logger.Error(
-		"CRITICAL: failed to persist state, shutting down",
+		errMsg,
 		slog.String("rpc", rpcName),
 		logger.ErrAttr(err),
 	)
-	rf.Stop()
+	panic(errMsg)
 }
