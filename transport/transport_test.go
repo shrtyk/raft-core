@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/shrtyk/raft-core/api"
 	raftpb "github.com/shrtyk/raft-core/internal/proto/gen"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -97,7 +98,17 @@ func TestGRPCTransport(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	transport, err := NewGRPCTransport(100*time.Millisecond, []*grpc.ClientConn{conn})
+	cfg := &api.RaftConfig{
+		Timings: api.RaftTimings{
+			RPCTimeout: 100 * time.Millisecond,
+		},
+		CBreaker: api.CircuitBreakerCfg{
+			FailureThreshold: 5,
+			SuccessThreshold: 3,
+			ResetTimeout:     1 * time.Second,
+		},
+	}
+	transport, err := NewGRPCTransport(cfg, []*grpc.ClientConn{conn})
 	require.NoError(t, err)
 	assert.Equal(t, 1, transport.PeersCount())
 
@@ -156,7 +167,17 @@ func TestGRPCTransport(t *testing.T) {
 		require.NoError(t, err)
 		defer conn.Close()
 
-		timeoutTransport, err := NewGRPCTransport(50*time.Millisecond, []*grpc.ClientConn{conn})
+		timeoutCfg := &api.RaftConfig{
+			Timings: api.RaftTimings{
+				RPCTimeout: 50 * time.Millisecond,
+			},
+			CBreaker: api.CircuitBreakerCfg{
+				FailureThreshold: 5,
+				SuccessThreshold: 3,
+				ResetTimeout:     1 * time.Second,
+			},
+		}
+		timeoutTransport, err := NewGRPCTransport(timeoutCfg, []*grpc.ClientConn{conn})
 		require.NoError(t, err)
 
 		_, err = timeoutTransport.SendRequestVote(ctx, 0, &raftpb.RequestVoteRequest{})
