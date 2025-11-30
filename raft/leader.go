@@ -27,6 +27,11 @@ func (rf *Raft) sendSnapshotOrEntries() {
 				rf.mu.RUnlock()
 				return
 			}
+			if !rf.transport.IsPeerAvailable(peerIdx) {
+				rf.logger.Debug("peer not available, circuit open", slog.Int("peer_id", peerIdx))
+				rf.mu.RUnlock()
+				return
+			}
 
 			var err error
 			if rf.nextIdx[peerIdx] <= rf.lastIncludedIndex {

@@ -26,6 +26,11 @@ func DefaultConfig() *api.RaftConfig {
 			ShutdownTimeout:            3 * time.Second,
 			RPCTimeout:                 100 * time.Millisecond,
 		},
+		CBreaker: api.CircuitBreakerCfg{
+			FailureThreshold: 6,
+			SuccessThreshold: 4,
+			ResetTimeout:     5 * time.Second,
+		},
 		Snapshots: api.SnapshotsCfg{
 			CheckLogSizeInterval: 30 * time.Second,
 			ThresholdBytes:       0,
@@ -47,6 +52,11 @@ func TestsConfig() *api.RaftConfig {
 			HeartbeatTimeout:           60 * time.Millisecond,
 			ShutdownTimeout:            3 * time.Second,
 			RPCTimeout:                 100 * time.Millisecond,
+		},
+		CBreaker: api.CircuitBreakerCfg{
+			FailureThreshold: 6,
+			SuccessThreshold: 4,
+			ResetTimeout:     5 * time.Second,
 		},
 		Snapshots: api.SnapshotsCfg{
 			CheckLogSizeInterval: 30 * time.Second,
