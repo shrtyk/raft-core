@@ -10,6 +10,7 @@ import (
 type RaftConfig struct {
 	Log                LoggerCfg
 	Timings            RaftTimings
+	CBreaker           CircuitBreakerCfg
 	HttpMonitoringAddr string
 	GRPCAddr           string
 	Snapshots          SnapshotsCfg
@@ -33,4 +34,11 @@ type RaftTimings struct {
 type SnapshotsCfg struct {
 	CheckLogSizeInterval time.Duration
 	ThresholdBytes       int
+}
+
+// CircuitBreakerCfg holds the configuration for the circuit breaker.
+type CircuitBreakerCfg struct {
+	FailureThreshold int
+	SuccessThreshold int
+	ResetTimeout     time.Duration
 }

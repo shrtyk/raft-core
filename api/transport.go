@@ -20,4 +20,7 @@ type Transport interface {
 
 	// PeersCount returns the total number of peers in the Raft cluster.
 	PeersCount() int
+
+	// IsPeerAvailable return true if peer currently available to be called and false otherwise.
+	IsPeerAvailable(peerID int) bool
 }

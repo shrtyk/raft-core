@@ -50,3 +50,7 @@ func (st *SimTransport) SendInstallSnapshot(ctx context.Context, to int, req *ra
 func (st *SimTransport) PeersCount() int {
 	return len(st.ends)
 }
+
+func (st *SimTransport) IsPeerAvailable(peerID int) bool {
+	return true
+}
