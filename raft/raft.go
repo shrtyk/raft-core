@@ -194,10 +194,11 @@ func (rf *Raft) ReadOnly(ctx context.Context, key []byte) (*api.ReadOnlyResult, 
 	isLeader := rf.isState(leader)
 	commitIndex := rf.commitIdx
 	lastHeartbeat := rf.lastHeartbeatMajorityTime
+	leaderId := rf.leaderId
 	rf.mu.RUnlock()
 
 	if !isLeader {
-		return &api.ReadOnlyResult{IsLeader: false}, nil
+		return &api.ReadOnlyResult{IsLeader: false, LeaderId: leaderId}, nil
 	}
 
 	// For linearizable reads, the lease duration must be shorter than the election timeout.
@@ -207,9 +208,13 @@ func (rf *Raft) ReadOnly(ctx context.Context, key []byte) (*api.ReadOnlyResult, 
 		// Confirm if it is still the leader before serving a read.
 		tctx, tcancel := context.WithTimeout(ctx, rf.cfg.Timings.RPCTimeout)
 		defer tcancel()
+
 		if !rf.ConfirmLeadership(tctx) {
 			rf.logger.Warn("failed to confirm leadership, aborting read-only request")
-			return &api.ReadOnlyResult{IsLeader: false}, nil
+			rf.mu.RLock()
+			leaderId = rf.leaderId
+			rf.mu.RUnlock()
+			return &api.ReadOnlyResult{IsLeader: false, LeaderId: leaderId}, nil
 		}
 		rf.logger.Debug("leader lease renewed")
 	}
@@ -242,8 +247,11 @@ func (rf *Raft) ReadOnly(ctx context.Context, key []byte) (*api.ReadOnlyResult, 
 		return nil, fmt.Errorf("failed to read from FSM: %w", err)
 	}
 
+	rf.mu.RLock()
+	defer rf.mu.RUnlock()
 	return &api.ReadOnlyResult{
 		Data:     data,
 		IsLeader: true,
+		LeaderId: rf.me,
 	}, nil
 }

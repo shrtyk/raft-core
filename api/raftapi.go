@@ -90,4 +90,5 @@ type SubmitResult struct {
 type ReadOnlyResult struct {
 	Data     []byte
 	IsLeader bool
+	LeaderId int
 }
