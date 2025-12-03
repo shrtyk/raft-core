@@ -2,8 +2,6 @@ package raft
 
 import (
 	"context"
-	"fmt"
-	"time"
 
 	raftpb "github.com/shrtyk/raft-core/internal/proto/gen"
 )
@@ -201,56 +199,4 @@ func (rf *Raft) InstallSnapshot(ctx context.Context,
 	}
 
 	return
-}
-
-func (rf *Raft) ReadOnly(ctx context.Context, req *raftpb.ReadOnlyRequest) (*raftpb.ReadOnlyResponse, error) {
-	rf.mu.RLock()
-	isLeader := rf.isState(leader)
-	commitIndex := rf.commitIdx
-	lastHeartbeat := rf.lastHeartbeatMajorityTime
-	leaderId := rf.leaderId
-	rf.mu.RUnlock()
-
-	if !isLeader {
-		return &raftpb.ReadOnlyResponse{IsLeader: false, LeaderId: int64(leaderId)}, nil
-	}
-
-	leaseDuration := rf.cfg.Timings.HeartbeatTimeout
-	if time.Since(lastHeartbeat) > leaseDuration {
-		rf.logger.Debug("leader lease expired for read-only request")
-		return &raftpb.ReadOnlyResponse{IsLeader: false, LeaderId: int64(leaderId)}, nil
-	}
-
-	// Wait for state machine to catch up to the commit index at the time of the read
-	tctx, tcancel := context.WithTimeout(ctx, rf.cfg.Timings.RPCTimeout)
-	defer tcancel()
-
-	for {
-		rf.mu.RLock()
-		lastApplied := rf.lastAppliedIdx
-		rf.mu.RUnlock()
-
-		if lastApplied >= commitIndex {
-			break
-		}
-
-		select {
-		case <-tctx.Done():
-			return nil, fmt.Errorf("timeout waiting for state machine to catch up for read at commit index %d: %w", commitIndex, tctx.Err())
-		// TODO configurable
-		case <-time.After(5 * time.Millisecond):
-			continue
-		}
-	}
-
-	data, err := rf.fsm.Read(req.Query)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read from FSM: %w", err)
-	}
-
-	return &raftpb.ReadOnlyResponse{
-		Data:     data,
-		IsLeader: true,
-		LeaderId: int64(leaderId),
-	}, nil
 }

@@ -11,6 +11,79 @@ import (
 	"github.com/shrtyk/raft-core/pkg/logger"
 )
 
+// sendHeartbeats sends heartbeats to all peers to confirm leadership and returns
+// true if a majority acknowledges the leader in the current term.
+func (rf *Raft) ConfirmLeadership(ctx context.Context) bool {
+	rf.mu.RLock()
+	curTerm := rf.curTerm
+	if !rf.isState(leader) {
+		rf.mu.RUnlock()
+		return false
+	}
+	rf.mu.RUnlock()
+
+	acks := make(chan bool, rf.peersCount-1)
+	for i := range rf.peersCount {
+		if i == rf.me {
+			continue
+		}
+		go func(peerIdx int) {
+			rf.mu.RLock()
+			// A heartbeat is an AppendEntries RPC with no log entries.
+			req := &raftpb.AppendEntriesRequest{
+				Term:              curTerm,
+				LeaderId:          int64(rf.me),
+				PrevLogIndex:      rf.nextIdx[peerIdx] - 1,
+				PrevLogTerm:       rf.getTerm(rf.nextIdx[peerIdx] - 1),
+				LeaderCommitIndex: rf.commitIdx,
+				Entries:           nil,
+			}
+			rf.mu.RUnlock()
+
+			tctx, tcancel := context.WithTimeout(ctx, rf.cfg.Timings.RPCTimeout)
+			defer tcancel()
+
+			reply, err := rf.transport.SendAppendEntries(tctx, peerIdx, req)
+			if err != nil {
+				rf.logger.Warn("failed to get heartbeat response from peer", "peer_id", peerIdx, logger.ErrAttr(err))
+				acks <- false
+				return
+			}
+
+			rf.mu.Lock()
+			// If a peer has a higher term, we are no longer the leader.
+			if reply.Term > rf.curTerm {
+				rf.becomeFollower(reply.Term)
+				rf.mu.Unlock()
+				acks <- false
+				return
+			}
+			rf.mu.Unlock()
+			acks <- true
+		}(i)
+	}
+
+	confirmedAcks := 1 // Start with 1 for the leader itself.
+	majority := rf.peersCount/2 + 1
+	for range rf.peersCount - 1 {
+		select {
+		case <-ctx.Done():
+			return false // Timeout.
+		case ack := <-acks:
+			if ack {
+				confirmedAcks++
+			}
+			if confirmedAcks >= majority {
+				rf.mu.Lock()
+				rf.lastHeartbeatMajorityTime = time.Now()
+				rf.mu.Unlock()
+				return true
+			}
+		}
+	}
+	return confirmedAcks >= majority
+}
+
 // sendSnapshotOrEntries is invoked by the leader to replicate its state to all peers
 func (rf *Raft) sendSnapshotOrEntries() {
 	rf.mu.RLock()

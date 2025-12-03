@@ -549,110 +549,6 @@ func (x *AppendEntriesResponse) GetConflictTerm() int64 {
 	return 0
 }
 
-type ReadOnlyRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Query         []byte                 `protobuf:"bytes,1,opt,name=Query,proto3" json:"Query,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ReadOnlyRequest) Reset() {
-	*x = ReadOnlyRequest{}
-	mi := &file_raft_proto_msgTypes[8]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ReadOnlyRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ReadOnlyRequest) ProtoMessage() {}
-
-func (x *ReadOnlyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_raft_proto_msgTypes[8]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ReadOnlyRequest.ProtoReflect.Descriptor instead.
-func (*ReadOnlyRequest) Descriptor() ([]byte, []int) {
-	return file_raft_proto_rawDescGZIP(), []int{8}
-}
-
-func (x *ReadOnlyRequest) GetQuery() []byte {
-	if x != nil {
-		return x.Query
-	}
-	return nil
-}
-
-type ReadOnlyResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Data          []byte                 `protobuf:"bytes,1,opt,name=Data,proto3" json:"Data,omitempty"`
-	IsLeader      bool                   `protobuf:"varint,2,opt,name=IsLeader,proto3" json:"IsLeader,omitempty"`
-	LeaderId      int64                  `protobuf:"varint,3,opt,name=LeaderId,proto3" json:"LeaderId,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ReadOnlyResponse) Reset() {
-	*x = ReadOnlyResponse{}
-	mi := &file_raft_proto_msgTypes[9]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ReadOnlyResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ReadOnlyResponse) ProtoMessage() {}
-
-func (x *ReadOnlyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_raft_proto_msgTypes[9]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ReadOnlyResponse.ProtoReflect.Descriptor instead.
-func (*ReadOnlyResponse) Descriptor() ([]byte, []int) {
-	return file_raft_proto_rawDescGZIP(), []int{9}
-}
-
-func (x *ReadOnlyResponse) GetData() []byte {
-	if x != nil {
-		return x.Data
-	}
-	return nil
-}
-
-func (x *ReadOnlyResponse) GetIsLeader() bool {
-	if x != nil {
-		return x.IsLeader
-	}
-	return false
-}
-
-func (x *ReadOnlyResponse) GetLeaderId() int64 {
-	if x != nil {
-		return x.LeaderId
-	}
-	return 0
-}
-
 var File_raft_proto protoreflect.FileDescriptor
 
 const file_raft_proto_rawDesc = "" +
@@ -696,18 +592,11 @@ const file_raft_proto_rawDesc = "" +
 	"\x04Term\x18\x01 \x01(\x03R\x04Term\x12\x18\n" +
 	"\aSuccess\x18\x02 \x01(\bR\aSuccess\x12$\n" +
 	"\rConflictIndex\x18\x03 \x01(\x03R\rConflictIndex\x12\"\n" +
-	"\fConflictTerm\x18\x04 \x01(\x03R\fConflictTerm\"'\n" +
-	"\x0fReadOnlyRequest\x12\x14\n" +
-	"\x05Query\x18\x01 \x01(\fR\x05Query\"^\n" +
-	"\x10ReadOnlyResponse\x12\x12\n" +
-	"\x04Data\x18\x01 \x01(\fR\x04Data\x12\x1a\n" +
-	"\bIsLeader\x18\x02 \x01(\bR\bIsLeader\x12\x1a\n" +
-	"\bLeaderId\x18\x03 \x01(\x03R\bLeaderId2\xbe\x02\n" +
+	"\fConflictTerm\x18\x04 \x01(\x03R\fConflictTerm2\xfd\x01\n" +
 	"\vRaftService\x12T\n" +
 	"\x0fInstallSnapshot\x12\x1f.raft.v1.InstallSnapshotRequest\x1a .raft.v1.InstallSnapshotResponse\x12H\n" +
 	"\vRequestVote\x12\x1b.raft.v1.RequestVoteRequest\x1a\x1c.raft.v1.RequestVoteResponse\x12N\n" +
-	"\rAppendEntries\x12\x1d.raft.v1.AppendEntriesRequest\x1a\x1e.raft.v1.AppendEntriesResponse\x12?\n" +
-	"\bReadOnly\x12\x18.raft.v1.ReadOnlyRequest\x1a\x19.raft.v1.ReadOnlyResponseB7Z5github.com/shrtyk/raft-core/internal/proto/gen;raftpbb\x06proto3"
+	"\rAppendEntries\x12\x1d.raft.v1.AppendEntriesRequest\x1a\x1e.raft.v1.AppendEntriesResponseB7Z5github.com/shrtyk/raft-core/internal/proto/gen;raftpbb\x06proto3"
 
 var (
 	file_raft_proto_rawDescOnce sync.Once
@@ -721,7 +610,7 @@ func file_raft_proto_rawDescGZIP() []byte {
 	return file_raft_proto_rawDescData
 }
 
-var file_raft_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_raft_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_raft_proto_goTypes = []any{
 	(*LogEntry)(nil),                // 0: raft.v1.LogEntry
 	(*RaftPersistentState)(nil),     // 1: raft.v1.RaftPersistentState
@@ -731,8 +620,6 @@ var file_raft_proto_goTypes = []any{
 	(*RequestVoteResponse)(nil),     // 5: raft.v1.RequestVoteResponse
 	(*AppendEntriesRequest)(nil),    // 6: raft.v1.AppendEntriesRequest
 	(*AppendEntriesResponse)(nil),   // 7: raft.v1.AppendEntriesResponse
-	(*ReadOnlyRequest)(nil),         // 8: raft.v1.ReadOnlyRequest
-	(*ReadOnlyResponse)(nil),        // 9: raft.v1.ReadOnlyResponse
 }
 var file_raft_proto_depIdxs = []int32{
 	0, // 0: raft.v1.RaftPersistentState.Log:type_name -> raft.v1.LogEntry
@@ -740,13 +627,11 @@ var file_raft_proto_depIdxs = []int32{
 	2, // 2: raft.v1.RaftService.InstallSnapshot:input_type -> raft.v1.InstallSnapshotRequest
 	4, // 3: raft.v1.RaftService.RequestVote:input_type -> raft.v1.RequestVoteRequest
 	6, // 4: raft.v1.RaftService.AppendEntries:input_type -> raft.v1.AppendEntriesRequest
-	8, // 5: raft.v1.RaftService.ReadOnly:input_type -> raft.v1.ReadOnlyRequest
-	3, // 6: raft.v1.RaftService.InstallSnapshot:output_type -> raft.v1.InstallSnapshotResponse
-	5, // 7: raft.v1.RaftService.RequestVote:output_type -> raft.v1.RequestVoteResponse
-	7, // 8: raft.v1.RaftService.AppendEntries:output_type -> raft.v1.AppendEntriesResponse
-	9, // 9: raft.v1.RaftService.ReadOnly:output_type -> raft.v1.ReadOnlyResponse
-	6, // [6:10] is the sub-list for method output_type
-	2, // [2:6] is the sub-list for method input_type
+	3, // 5: raft.v1.RaftService.InstallSnapshot:output_type -> raft.v1.InstallSnapshotResponse
+	5, // 6: raft.v1.RaftService.RequestVote:output_type -> raft.v1.RequestVoteResponse
+	7, // 7: raft.v1.RaftService.AppendEntries:output_type -> raft.v1.AppendEntriesResponse
+	5, // [5:8] is the sub-list for method output_type
+	2, // [2:5] is the sub-list for method input_type
 	2, // [2:2] is the sub-list for extension type_name
 	2, // [2:2] is the sub-list for extension extendee
 	0, // [0:2] is the sub-list for field type_name
@@ -763,7 +648,7 @@ func file_raft_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_raft_proto_rawDesc), len(file_raft_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   10,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

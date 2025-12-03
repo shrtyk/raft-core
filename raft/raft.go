@@ -188,3 +188,62 @@ func (rf *Raft) Submit(command []byte) *api.SubmitResult {
 
 	return res
 }
+
+func (rf *Raft) ReadOnly(ctx context.Context, key []byte) (*api.ReadOnlyResult, error) {
+	rf.mu.RLock()
+	isLeader := rf.isState(leader)
+	commitIndex := rf.commitIdx
+	lastHeartbeat := rf.lastHeartbeatMajorityTime
+	rf.mu.RUnlock()
+
+	if !isLeader {
+		return &api.ReadOnlyResult{IsLeader: false}, nil
+	}
+
+	// For linearizable reads, the lease duration must be shorter than the election timeout.
+	leaseDuration := rf.cfg.Timings.ElectionTimeoutBase
+	if time.Since(lastHeartbeat) > leaseDuration {
+		rf.logger.Debug("leader lease expired, confirming leadership with heartbeats")
+		// Confirm if it is still the leader before serving a read.
+		tctx, tcancel := context.WithTimeout(ctx, rf.cfg.Timings.RPCTimeout)
+		defer tcancel()
+		if !rf.ConfirmLeadership(tctx) {
+			rf.logger.Warn("failed to confirm leadership, aborting read-only request")
+			return &api.ReadOnlyResult{IsLeader: false}, nil
+		}
+		rf.logger.Debug("leader lease renewed")
+	}
+
+	// Wait for the state machine to catch up to the commit index known at the time the read was requested.
+	tctx, tcancel := context.WithTimeout(ctx, rf.cfg.Timings.RPCTimeout)
+	defer tcancel()
+
+	for {
+		rf.mu.RLock()
+		lastApplied := rf.lastAppliedIdx
+		rf.mu.RUnlock()
+
+		if lastApplied >= commitIndex {
+			break
+		}
+
+		select {
+		case <-tctx.Done():
+			return nil, fmt.Errorf("timeout waiting for state machine to catch up for read at commit index %d: %w", commitIndex, tctx.Err())
+		// TODO: This could be improved with a channel notification from the applier.
+		case <-time.After(5 * time.Millisecond):
+			continue
+		}
+	}
+
+	// State machine is up-to-date, we can now safely read from it.
+	data, err := rf.fsm.Read(key)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read from FSM: %w", err)
+	}
+
+	return &api.ReadOnlyResult{
+		Data:     data,
+		IsLeader: true,
+	}, nil
+}

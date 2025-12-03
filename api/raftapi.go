@@ -24,7 +24,10 @@ interfaces:
 */
 package api
 
-import "errors"
+import (
+	"context"
+	"errors"
+)
 
 var (
 	ErrOutdatedTerm = errors.New("raft: term has been updated.")
@@ -48,6 +51,8 @@ type Raft interface {
 	//
 	// This is non blocking call.
 	Submit(command []byte) *SubmitResult
+
+	ReadOnly(ctx context.Context, key []byte) (*ReadOnlyResult, error)
 
 	// State returns the current term and whether this peer believes it is the leader.
 	State() (int64, bool)
@@ -79,4 +84,10 @@ type SubmitResult struct {
 	Term     int64
 	IsLeader bool
 	LeaderID int
+}
+
+// ReadOnlyResult holds the result of ReadOnly request.
+type ReadOnlyResult struct {
+	Data     []byte
+	IsLeader bool
 }
