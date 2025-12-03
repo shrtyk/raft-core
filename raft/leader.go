@@ -41,7 +41,7 @@ func (rf *Raft) sendSnapshotOrEntries() {
 			}
 
 			if err != nil {
-				rf.logger.Info("failed to send gRPC call", slog.Int("peer_id", peerIdx), logger.ErrAttr(err))
+				rf.logger.Debug("failed to send gRPC call", slog.Int("peer_id", peerIdx), logger.ErrAttr(err))
 			}
 		}(i)
 	}
