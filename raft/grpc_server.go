@@ -50,7 +50,8 @@ func (s *grpcServer) Start() error {
 // Stop gracefully stops the gRPC server.
 func (s *grpcServer) Stop() error {
 	if s.server != nil {
-		s.server.Stop()
+		s.server.GracefulStop()
+		s.rf.logger.Info("grpc raft server stopped")
 	}
 	return nil
 }

@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -12,7 +13,7 @@ import (
 // MonitoringServer defines the interface for the HTTP monitoring server.
 type MonitoringServer interface {
 	Start() error
-	Stop() error
+	Stop(context.Context) error
 }
 
 // httpMonitoringServer implements the MonitoringServer interface.
@@ -49,9 +50,10 @@ func (s *httpMonitoringServer) Start() error {
 }
 
 // Stop gracefully stops the HTTP server.
-func (s *httpMonitoringServer) Stop() error {
+func (s *httpMonitoringServer) Stop(ctx context.Context) error {
 	if s.server != nil {
-		return s.server.Close()
+		s.rf.logger.Info("http monitoring raft server gracefully shutting down")
+		return s.server.Shutdown(ctx)
 	}
 	return nil
 }

@@ -122,6 +122,9 @@ func (rf *Raft) Start() error {
 
 // Stop sets the peer to a dead state and stops completely
 func (rf *Raft) Stop() error {
+	tctx, tcancel := context.WithTimeout(context.Background(), rf.cfg.Timings.ShutdownTimeout)
+	defer tcancel()
+
 	var err error
 	atomic.StoreInt32(&rf.dead, 1)
 	rf.raftCancel()
@@ -133,7 +136,7 @@ func (rf *Raft) Stop() error {
 	}
 
 	if rf.monitoringServer != nil {
-		if serr := rf.monitoringServer.Stop(); serr != nil {
+		if serr := rf.monitoringServer.Stop(tctx); serr != nil {
 			err = errors.Join(err, fmt.Errorf("failed to shutdown monitoring server: %w", serr))
 		}
 	}

@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/shrtyk/raft-core/api"
-	"github.com/shrtyk/raft-core/internal/cbreaker"
 	raftpb "github.com/shrtyk/raft-core/internal/proto/gen"
 	"google.golang.org/grpc"
 )
@@ -14,7 +13,6 @@ var _ api.Transport = (*GRPCTransport)(nil)
 
 type client struct {
 	raftClient raftpb.RaftServiceClient
-	cBreaker   *cbreaker.CircuitBreaker
 }
 
 type GRPCTransport struct {
@@ -31,11 +29,6 @@ func NewGRPCTransport(cfg *api.RaftConfig, conns []*grpc.ClientConn) (*GRPCTrans
 	for i, conn := range conns {
 		tr.clients[i] = &client{
 			raftClient: raftpb.NewRaftServiceClient(conn),
-			cBreaker: cbreaker.NewCircuitBreaker(
-				cfg.CBreaker.FailureThreshold,
-				cfg.CBreaker.SuccessThreshold,
-				cfg.CBreaker.ResetTimeout,
-			),
 		}
 	}
 
@@ -49,9 +42,7 @@ func (t *GRPCTransport) SendRequestVote(
 	tctx, tcancel := context.WithTimeout(ctx, t.requestTimeout)
 	defer tcancel()
 
-	return cbreaker.Do(tctx, t.clients[to].cBreaker, func(ctx context.Context) (*raftpb.RequestVoteResponse, error) {
-		return t.clients[to].raftClient.RequestVote(tctx, req)
-	})
+	return t.clients[to].raftClient.RequestVote(tctx, req)
 }
 
 func (t *GRPCTransport) SendAppendEntries(
@@ -60,9 +51,7 @@ func (t *GRPCTransport) SendAppendEntries(
 	req *raftpb.AppendEntriesRequest) (*raftpb.AppendEntriesResponse, error) {
 	tctx, tcancel := context.WithTimeout(ctx, t.requestTimeout)
 	defer tcancel()
-	return cbreaker.Do(tctx, t.clients[to].cBreaker, func(ctx context.Context) (*raftpb.AppendEntriesResponse, error) {
-		return t.clients[to].raftClient.AppendEntries(tctx, req)
-	})
+	return t.clients[to].raftClient.AppendEntries(tctx, req)
 }
 
 func (t *GRPCTransport) SendInstallSnapshot(
@@ -71,9 +60,7 @@ func (t *GRPCTransport) SendInstallSnapshot(
 	req *raftpb.InstallSnapshotRequest) (*raftpb.InstallSnapshotResponse, error) {
 	tctx, tcancel := context.WithTimeout(ctx, t.requestTimeout)
 	defer tcancel()
-	return cbreaker.Do(tctx, t.clients[to].cBreaker, func(ctx context.Context) (*raftpb.InstallSnapshotResponse, error) {
-		return t.clients[to].raftClient.InstallSnapshot(tctx, req)
-	})
+	return t.clients[to].raftClient.InstallSnapshot(tctx, req)
 }
 
 func (t *GRPCTransport) PeersCount() int {
@@ -81,5 +68,5 @@ func (t *GRPCTransport) PeersCount() int {
 }
 
 func (t *GRPCTransport) IsPeerAvailable(peerID int) bool {
-	return t.clients[peerID].cBreaker.IsClosed()
+	return true
 }
