@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/shrtyk/raft-core/api"
 	raftpb "github.com/shrtyk/raft-core/internal/proto/gen"
 	"github.com/shrtyk/raft-core/pkg/logger"
 	"google.golang.org/protobuf/proto"
@@ -33,15 +34,24 @@ func (rf *Raft) getPersistentStateBytes() []byte {
 //
 // It must be called with rf.mu held, and it will unlock it
 func (rf *Raft) persistAndUnlock(snapshot []byte) error {
-	state := rf.getPersistentStateBytes()
-
-	rf.pmu.Lock()
-	defer rf.pmu.Unlock()
-	rf.mu.Unlock()
-
 	if snapshot == nil {
-		return rf.persister.SaveRaftState(state)
+		logCopy := make([]*raftpb.LogEntry, len(rf.log))
+		for i, entry := range rf.log {
+			logCopy[i] = proto.Clone(entry).(*raftpb.LogEntry)
+		}
+		meta := api.RaftMetadata{
+			CurrentTerm:       rf.curTerm,
+			VotedFor:          rf.votedFor,
+			LastIncludedIndex: rf.lastIncludedIndex,
+			LastIncludedTerm:  rf.lastIncludedTerm,
+		}
+		rf.mu.Unlock()
+		return rf.persister.Overwrite(logCopy, meta)
 	}
+
+	// For snapshot persistence, serialize the state and save both.
+	state := rf.getPersistentStateBytes()
+	rf.mu.Unlock()
 	return rf.persister.SaveStateAndSnapshot(state, snapshot)
 }
 

@@ -22,12 +22,12 @@ type Raft struct {
 	//
 	// Lock mu -> update persistence state -> make a copy state -> lock pmu -> unlock mu -> persist copy of state -> unlock pmu
 	pmu        sync.RWMutex
-	peersCount int           // Amount of peers in cluster
-	transport  api.Transport // RPC clients layer abstraction
+	peersCount int              // Amount of peers in cluster
+	transport  api.Transport    // RPC clients layer abstraction
 	persister  api.Persister // Persistence layer abstraction (should be concurrent safe)
-	me         int           // this peer's index
-	leaderId   int           // ID of the current leader
-	dead       int32         // set by Stop()
+	me         int              // this peer's index
+	leaderId   int              // ID of the current leader
+	dead       int32            // set by Stop()
 
 	state State           // State of the peer
 	cfg   *api.RaftConfig // Config of the peer
@@ -161,19 +161,24 @@ func (rf *Raft) Submit(command []byte) *api.SubmitResult {
 
 	res.Term = rf.curTerm
 	res.LeaderID = rf.me
-	rf.log = append(rf.log, &raftpb.LogEntry{
+
+	newEntry := &raftpb.LogEntry{
 		Term: rf.curTerm,
 		Cmd:  command,
-	})
+	}
+	rf.log = append(rf.log, newEntry)
 	rf.logSizeInBytes += len(command)
 	lastLogIdx, _ := rf.lastLogIdxAndTerm()
 	rf.matchIdx[rf.me] = lastLogIdx
 	rf.nextIdx[rf.me] = lastLogIdx + 1
 
+	rf.mu.Unlock()
+	pErr := rf.persister.AppendEntries([]*raftpb.LogEntry{newEntry})
+
 	// If persistence fails, the node must not continue as leader,
 	// because it’s no longer a reliable state machine replica.
-	if err := rf.persistAndUnlock(nil); err != nil {
-		rf.logger.Warn("failed to persist log, stepping down as leader", logger.ErrAttr(err))
+	if pErr != nil {
+		rf.logger.Warn("failed to persist log, stepping down as leader", logger.ErrAttr(pErr))
 
 		rf.mu.Lock()
 		if rf.curTerm == res.Term && rf.isState(leader) {

@@ -52,13 +52,13 @@ func (rf *Raft) isLogConsistent(prevLogIdx int64, prevLogTerm int64) bool {
 // and returns true if there is need to persist
 //
 // Assumes the lock is held when called
-func (rf *Raft) processEntries(req *raftpb.AppendEntriesRequest) (needToPersist bool) {
+func (rf *Raft) processEntries(req *raftpb.AppendEntriesRequest) (didTruncate bool, didAppend bool) {
 	for i, entry := range req.Entries {
 		absIdx := req.PrevLogIndex + 1 + int64(i)
 		lastAbsIdx, _ := rf.lastLogIdxAndTerm()
 		if absIdx > lastAbsIdx {
 			rf.log = append(rf.log, req.Entries[i:]...)
-			needToPersist = true
+			didAppend = true
 			break
 		}
 
@@ -66,7 +66,8 @@ func (rf *Raft) processEntries(req *raftpb.AppendEntriesRequest) (needToPersist 
 			sliceIdx := absIdx - rf.lastIncludedIndex - 1
 			rf.log = rf.log[:sliceIdx]
 			rf.log = append(rf.log, req.Entries[i:]...)
-			needToPersist = true
+			didTruncate = true
+			didAppend = true
 			break
 		}
 	}

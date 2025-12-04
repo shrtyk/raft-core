@@ -6,8 +6,7 @@ import (
 	raftpb "github.com/shrtyk/raft-core/internal/proto/gen"
 )
 
-func (rf *Raft) RequestVote(ctx context.Context,
-	req *raftpb.RequestVoteRequest) (reply *raftpb.RequestVoteResponse, err error) {
+func (rf *Raft) RequestVote(ctx context.Context, req *raftpb.RequestVoteRequest) (reply *raftpb.RequestVoteResponse, err error) {
 	reply = &raftpb.RequestVoteResponse{}
 	var needToPersist bool
 
@@ -22,18 +21,13 @@ func (rf *Raft) RequestVote(ctx context.Context,
 	reply.VoterId = int64(rf.me)
 
 	if req.Term < rf.curTerm {
-		rf.logger.Warn(
-			"denying vote, candidate term too low",
-			"candidate_id", req.CandidateId,
-			"candidate_term", req.Term,
-			"current_term", rf.curTerm,
-		)
 		reply.Term = rf.curTerm
 		return
 	}
 
 	if req.Term > rf.curTerm {
-		needToPersist = rf.becomeFollower(req.Term)
+		rf.becomeFollower(req.Term)
+		needToPersist = true
 	}
 
 	reply.Term = rf.curTerm
@@ -72,8 +66,7 @@ func (rf *Raft) RequestVote(ctx context.Context,
 	return
 }
 
-func (rf *Raft) AppendEntries(ctx context.Context,
-	req *raftpb.AppendEntriesRequest) (reply *raftpb.AppendEntriesResponse, err error) {
+func (rf *Raft) AppendEntries(ctx context.Context, req *raftpb.AppendEntriesRequest) (reply *raftpb.AppendEntriesResponse, err error) {
 	reply = &raftpb.AppendEntriesResponse{}
 	var needToPersist bool
 	var shouldSignalApplier bool
@@ -89,44 +82,31 @@ func (rf *Raft) AppendEntries(ctx context.Context,
 		}
 	}()
 
-	if len(req.Entries) == 0 {
-		rf.logger.Debug("heartbeat received", "leader_id", req.LeaderId, "term", req.Term)
-	} else {
+	if len(req.Entries) > 0 {
 		rf.logger.Debug("append entries received", "leader_id", req.LeaderId, "term", req.Term, "num_entries", len(req.Entries))
 	}
 
-	reply.Success = false
-	reply.Term = rf.curTerm
-
 	if req.Term < rf.curTerm {
+		reply.Term = rf.curTerm
 		return
-	}
-
-	rf.leaderId = int(req.LeaderId)
-	if req.Term > rf.curTerm || rf.isState(candidate) {
-		needToPersist = rf.becomeFollower(req.Term)
 	}
 
 	rf.resetElectionTimer()
-	reply.Term = rf.curTerm
-	if req.PrevLogIndex < rf.lastIncludedIndex {
-		reply.Success = false
-		return
+
+	if req.Term > rf.curTerm || rf.isState(candidate) {
+		rf.becomeFollower(req.Term)
+		needToPersist = true
 	}
+	rf.leaderId = int(req.LeaderId)
+	reply.Term = rf.curTerm
 
 	if !rf.isLogConsistent(req.PrevLogIndex, req.PrevLogTerm) {
-		myPrevLogTerm := rf.getTerm(req.PrevLogIndex)
-		rf.logger.Warn(
-			"log inconsistent, rejecting append entries",
-			"prev_log_idx", req.PrevLogIndex,
-			"prev_log_term", req.PrevLogTerm,
-			"my_prev_log_term", myPrevLogTerm,
-		)
 		rf.fillConflictReply(req, reply)
 		return
 	}
 
-	if rf.processEntries(req) {
+	didTruncate, didAppend := rf.processEntries(req)
+	if didTruncate || didAppend {
 		needToPersist = true
 	}
 
@@ -137,12 +117,10 @@ func (rf *Raft) AppendEntries(ctx context.Context,
 	}
 
 	reply.Success = true
-
 	return
 }
 
-func (rf *Raft) InstallSnapshot(ctx context.Context,
-	req *raftpb.InstallSnapshotRequest) (reply *raftpb.InstallSnapshotResponse, err error) {
+func (rf *Raft) InstallSnapshot(ctx context.Context, req *raftpb.InstallSnapshotRequest) (reply *raftpb.InstallSnapshotResponse, err error) {
 	reply = &raftpb.InstallSnapshotResponse{}
 	var needToPersist, shouldSignalApplier bool
 	var snapshotData []byte
@@ -165,7 +143,8 @@ func (rf *Raft) InstallSnapshot(ctx context.Context,
 
 	rf.leaderId = int(req.LeaderId)
 	if req.Term > rf.curTerm {
-		needToPersist = rf.becomeFollower(req.Term)
+		rf.becomeFollower(req.Term)
+		needToPersist = true
 	}
 
 	rf.resetElectionTimer()

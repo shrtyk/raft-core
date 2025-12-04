@@ -54,7 +54,9 @@ func (rf *Raft) ConfirmLeadership(ctx context.Context) bool {
 			// If a peer has a higher term, we are no longer the leader.
 			if reply.Term > rf.curTerm {
 				rf.becomeFollower(reply.Term)
-				rf.mu.Unlock()
+				if pErr := rf.persistAndUnlock(nil); pErr != nil {
+					rf.handlePersistenceError("ConfirmLeadership", pErr)
+				}
 				acks <- false
 				return
 			}
@@ -155,9 +157,11 @@ func (rf *Raft) leaderSendEntries(peerIdx int) error {
 // processAppendEntriesReply processes the reply from an AppendEntries RPC
 func (rf *Raft) processAppendEntriesReply(peerIdx int, req *raftpb.AppendEntriesRequest, reply *raftpb.AppendEntriesResponse) error {
 	rf.mu.Lock()
-	defer rf.mu.Unlock()
 
 	if err := rf.checkOrUpdateTerm("AppendEntries", peerIdx, req.Term, reply.Term); err != nil {
+		if pErr := rf.persistAndUnlock(nil); pErr != nil {
+			rf.handlePersistenceError("AppendEntriesReply", pErr)
+		}
 		return err
 	}
 
@@ -171,12 +175,16 @@ func (rf *Raft) processAppendEntriesReply(peerIdx int, req *raftpb.AppendEntries
 		lastCommitIdx := rf.commitIdx
 		rf.tryToCommit()
 		if rf.commitIdx != lastCommitIdx {
+			rf.mu.Unlock()
 			rf.signalApplier()
+		} else {
+			rf.mu.Unlock()
 		}
 		return nil
 	}
 
 	rf.updateNextIndexAfterConflict(peerIdx, reply)
+	rf.mu.Unlock()
 	return nil
 }
 

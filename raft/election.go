@@ -68,7 +68,9 @@ func (rf *Raft) countVotes(repliesChan <-chan *raftpb.RequestVoteResponse, elect
 			// Step down if reply term is newer
 			if reply.Term > rf.curTerm {
 				rf.becomeFollower(reply.Term)
-				rf.mu.Unlock()
+				if pErr := rf.persistAndUnlock(nil); pErr != nil {
+					rf.handlePersistenceError("countVotes", pErr)
+				}
 				return
 			}
 

@@ -38,17 +38,15 @@ func (rf *Raft) isState(state State) bool {
 // and return true if need to persist state.
 //
 // Assumes the lock is held when called
-func (rf *Raft) becomeFollower(term int64) (needToPersist bool) {
+func (rf *Raft) becomeFollower(term int64) {
 	rf.logger.Info("transitioning to follower", "term", term)
 	atomic.StoreUint32(&rf.state, follower)
 	rf.leaderId = -1
 	if term > rf.curTerm {
 		rf.curTerm = term
 		rf.votedFor = votedForNone
-		needToPersist = true
 	}
 	rf.resetElectionTimer()
-	return
 }
 
 // becomeLeader transitions the peer to the leader state

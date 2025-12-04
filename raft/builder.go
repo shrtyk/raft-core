@@ -57,10 +57,10 @@ func (nb *nodeBuilder) Build() (api.Raft, error) {
 	persister := nb.persister
 	if persister == nil {
 		var err error
-		persister, err = storage.NewDefaultStorage(fmt.Sprintf("data-%d", nb.me), log)
+		persister, err = storage.NewWALStorage(fmt.Sprintf("data-%d", nb.me), log)
 		if err != nil {
 			cancel()
-			return nil, fmt.Errorf("builder: failed to create default storage: %w", err)
+			return nil, fmt.Errorf("builder: failed to create wal storage: %w", err)
 		}
 	}
 
