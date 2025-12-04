@@ -1,5 +1,21 @@
 package api
 
+import (
+	raftpb "github.com/shrtyk/raft-core/internal/proto/gen"
+)
+
+// RaftMetadata contains the persisted metadata of the Raft algorithm,
+// excluding the log entries.
+type RaftMetadata struct {
+	CurrentTerm       int64
+	VotedFor          int64
+	LastIncludedIndex int64
+	LastIncludedTerm  int64
+}
+
+// Persister defines the interface for Raft's persistent storage.
+// It combines the methods for managing Raft state, snapshots,
+// and granular WAL operations for performance.
 type Persister interface {
 	// SaveRaftState persists the Raft state (current term, vote, and log entries).
 	SaveRaftState(state []byte) error
@@ -21,4 +37,14 @@ type Persister interface {
 	//
 	// This is typically used only in tests.
 	RaftStateSize() (int, error)
+
+	// AppendEntries adds a batch of new log entries to the WAL.
+	AppendEntries(entries []*raftpb.LogEntry) error
+
+	// SetMetadata updates and persists the term and votedFor information.
+	SetMetadata(term int64, votedFor int64) error
+
+	// Overwrite atomically truncates and replaces the log and all associated metadata.
+	// This operation should be atomic; on failure, the old log and metadata should be preserved.
+	Overwrite(log []*raftpb.LogEntry, metadata RaftMetadata) error
 }
