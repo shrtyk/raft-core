@@ -194,7 +194,8 @@ func (ts *Test) cleanup() {
 }
 
 func (ts *Test) Mksrv(ends []*simrpc.ClientEnd, grp harness.Tgid, srv int, persister *harness.Persister) []harness.IService {
-	mem_persister := &MemPersister{p: persister}
+	mem_persister := NewMemPersister()
+	mem_persister.p = persister
 
 	transport := NewSimTransport(ends)
 

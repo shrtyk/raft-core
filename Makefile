@@ -10,19 +10,19 @@ compile/raft-proto:
 
 # run all simulation test
 test/sim-all:
-	@go test -v -race ./tests/
+	@go test -count=1 -v -race ./tests/
 # run election tests (simulation)
 test/sim-election:
-	@go test -v -race ./tests/ -run 3A
+	@go test -count=1 -v -race ./tests/ -run 3A
 
 # run replication tests (simulation)
 test/sim-replication:
-	@go test -v -race ./tests/ -run 3B
+	@go test -count=1 -v -race ./tests/ -run 3B
 
 # run persistence tests (simulation)
 test/sim-persistence:
-	@go test -v -race ./tests/ -run 3C
+	@go test -count=1 -v -race ./tests/ -run 3C
 
 # run snapshots tests (simulation)
 test/sim-snapshots:
-	@go test -v -race ./tests/ -run 3D
+	@go test -count=1 -v -race ./tests/ -run 3D
