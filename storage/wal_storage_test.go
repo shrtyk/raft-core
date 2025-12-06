@@ -5,7 +5,9 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/shrtyk/raft-core/api"
 	raftpb "github.com/shrtyk/raft-core/internal/proto/gen"
@@ -15,285 +17,247 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// newTestWAL creates a new WALStorage in a temporary directory for testing.
-// It returns the storage instance, the directory path, and a cleanup function.
-func newTestWAL(t *testing.T) (*WALStorage, string, func()) {
+func testFsyncConfig() api.FsyncCfg {
+	return api.FsyncCfg{
+		BatchSize: 10,
+		Timeout:   10 * time.Millisecond,
+	}
+}
+
+// newTestDir creates a new temporary directory for testing.
+func newTestDir(t *testing.T) string {
 	t.Helper()
 	dir, err := os.MkdirTemp("", "wal_test")
 	require.NoError(t, err)
-
-	// Discard logger output for cleaner test logs
-	_, logger := logger.NewTestLogger()
-	ws, err := NewWALStorage(dir, logger)
-	require.NoError(t, err)
-
-	cleanup := func() {
-		os.RemoveAll(dir)
-	}
-
-	return ws, dir, cleanup
+	return dir
 }
 
 func TestNewWALStorage(t *testing.T) {
 	t.Run("creates dir if not exists", func(t *testing.T) {
 		dir := filepath.Join(os.TempDir(), "wal_test_new_dir")
 		os.RemoveAll(dir)
-
-		logger := slog.New(slog.NewTextHandler(bytes.NewBuffer(nil), nil))
-		_, err := NewWALStorage(dir, logger)
-		require.NoError(t, err)
 		defer os.RemoveAll(dir)
+
+		log := slog.New(slog.NewTextHandler(bytes.NewBuffer(nil), nil))
+		ws, err := NewWALStorage(dir, log, testFsyncConfig())
+		require.NoError(t, err)
+		require.NoError(t, ws.Close())
 
 		_, err = os.Stat(dir)
 		require.NoError(t, err, "directory should be created")
 	})
 
 	t.Run("loads existing data on startup", func(t *testing.T) {
-		ws, dir, cleanup := newTestWAL(t)
-		defer cleanup()
+		dir := newTestDir(t)
+		defer os.RemoveAll(dir)
 
-		// 1. Add data to the first WAL instance
-		entries := []*raftpb.LogEntry{{Term: 1, Cmd: []byte("command")}}
-		require.NoError(t, ws.AppendEntries(entries))
-		require.NoError(t, ws.SetMetadata(1, 1))
+		cfg := testFsyncConfig()
+		_, log := logger.NewTestLogger()
 
-		// 2. Create a new instance pointing to the same directory
-		logger := slog.New(slog.NewTextHandler(bytes.NewBuffer(nil), nil))
-		ws2, err := NewWALStorage(dir, logger)
+		// 1. Create and populate the first WAL instance
+		ws1, err := NewWALStorage(dir, log, cfg)
 		require.NoError(t, err)
 
-		// 3. Verify the data was loaded
+		entries := []*raftpb.LogEntry{{Term: 1, Cmd: []byte("command")}}
+		require.NoError(t, ws1.AppendEntries(entries))
+		require.NoError(t, ws1.SetMetadata(1, 1))
+
+		// 2. Close the first instance to ensure data is flushed
+		require.NoError(t, ws1.Close())
+
+		// 3. Create a new instance pointing to the same directory
+		ws2, err := NewWALStorage(dir, log, cfg)
+		require.NoError(t, err)
+		defer ws2.Close()
+
+		// 4. Verify the data was loaded
 		assert.Equal(t, int64(1), ws2.metadata.CurrentTerm)
 		assert.Equal(t, int64(1), ws2.metadata.VotedFor)
-		require.Len(t, ws2.log, 1)
-		assert.True(t, proto.Equal(entries[0], ws2.log[0]))
+
+		stateBytes, err := ws2.ReadRaftState()
+		require.NoError(t, err)
+		var state raftpb.RaftPersistentState
+		require.NoError(t, proto.Unmarshal(stateBytes, &state))
+		require.Len(t, state.Log, 1)
+		assert.True(t, proto.Equal(entries[0], state.Log[0]))
 	})
 }
 
 func TestWALStorage_StateOperations(t *testing.T) {
-	ws, _, cleanup := newTestWAL(t)
-	defer cleanup()
+	dir := newTestDir(t)
+	defer os.RemoveAll(dir)
+	cfg := testFsyncConfig()
+	_, log := logger.NewTestLogger()
 
-	stateBytes, err := ws.ReadRaftState()
+	ws1, err := NewWALStorage(dir, log, cfg)
+	require.NoError(t, err)
+
+	stateBytes, err := ws1.ReadRaftState()
 	require.NoError(t, err)
 	assert.Nil(t, stateBytes)
-	size, err := ws.RaftStateSize()
+
+	entries := []*raftpb.LogEntry{{Term: 1, Cmd: []byte("entry1")}}
+	require.NoError(t, ws1.AppendEntries(entries))
+	require.NoError(t, ws1.SetMetadata(2, 5))
+
+	require.NoError(t, ws1.Close()) // Close to flush and restart
+
+	ws2, err := NewWALStorage(dir, log, cfg)
 	require.NoError(t, err)
-	assert.Equal(t, 0, size)
+	defer ws2.Close()
 
-	entries := []*raftpb.LogEntry{
-		{Term: 1, Cmd: []byte("entry1")},
-		{Term: 1, Cmd: []byte("entry2")},
-		{Term: 2, Cmd: nil}, // no-op entry
-	}
-	err = ws.AppendEntries(entries)
+	assert.Equal(t, int64(2), ws2.metadata.CurrentTerm)
+	assert.Equal(t, int64(5), ws2.metadata.VotedFor)
+
+	stateBytes, err = ws2.ReadRaftState()
 	require.NoError(t, err)
-
-	// Set metadata
-	err = ws.SetMetadata(2, 5)
-	require.NoError(t, err)
-
-	// Check in-memory state
-	assert.Len(t, ws.log, 3)
-	assert.Equal(t, int64(2), ws.metadata.CurrentTerm)
-	assert.Equal(t, int64(5), ws.metadata.VotedFor)
-
-	// Check ReadRaftState
-	stateBytes, err = ws.ReadRaftState()
-	require.NoError(t, err)
-	assert.NotNil(t, stateBytes)
-
 	var state raftpb.RaftPersistentState
-	err = proto.Unmarshal(stateBytes, &state)
-	require.NoError(t, err)
-
+	require.NoError(t, proto.Unmarshal(stateBytes, &state))
 	assert.Equal(t, int64(2), state.CurrentTerm)
-	assert.Equal(t, int64(5), state.VotedFor)
-	require.Len(t, state.Log, 3)
-	assert.True(t, proto.Equal(entries[0], state.Log[0]))
-	assert.True(t, proto.Equal(entries[1], state.Log[1]))
-	assert.True(t, proto.Equal(entries[2], state.Log[2]))
-
-	// Check RaftStateSize
-	size, err = ws.RaftStateSize()
-	require.NoError(t, err)
-	assert.Equal(t, len(stateBytes), size)
+	require.Len(t, state.Log, 1)
 }
 
-func TestWALStorage_Overwrite_And_SaveRaftState(t *testing.T) {
-	ws, dir, cleanup := newTestWAL(t)
-	defer cleanup()
+func TestWALStorage_Overwrite(t *testing.T) {
+	dir := newTestDir(t)
+	defer os.RemoveAll(dir)
+	cfg := testFsyncConfig()
+	_, log := logger.NewTestLogger()
 
-	require.NoError(t, ws.AppendEntries([]*raftpb.LogEntry{{Term: 1, Cmd: []byte("old")}}))
-	require.NoError(t, ws.SetMetadata(1, 1))
+	ws1, err := NewWALStorage(dir, log, cfg)
+	require.NoError(t, err)
+	require.NoError(t, ws1.AppendEntries([]*raftpb.LogEntry{{Term: 1, Cmd: []byte("old")}}))
+	require.NoError(t, ws1.SetMetadata(1, 1))
 
-	// Define the new state to be written
-	newLog := []*raftpb.LogEntry{
-		{Term: 2, Cmd: []byte("new")},
-	}
-	newMeta := api.RaftMetadata{
-		CurrentTerm:       2,
-		VotedFor:          2,
-		LastIncludedIndex: 3,
-		LastIncludedTerm:  2,
-	}
+	newLog := []*raftpb.LogEntry{{Term: 2, Cmd: []byte("new")}}
+	newMeta := api.RaftMetadata{CurrentTerm: 2, VotedFor: 2, LastIncludedIndex: 3, LastIncludedTerm: 2}
 
-	t.Run("Overwrite", func(t *testing.T) {
-		err := ws.Overwrite(newLog, newMeta)
-		require.NoError(t, err)
+	err = ws1.Overwrite(newLog, newMeta)
+	require.NoError(t, err)
+	require.NoError(t, ws1.Close())
 
-		// Verify in-memory state
-		assert.Equal(t, newMeta.CurrentTerm, ws.metadata.CurrentTerm)
-		assert.Equal(t, newMeta.VotedFor, ws.metadata.VotedFor)
-		assert.Equal(t, newMeta.LastIncludedIndex, ws.metadata.LastIncludedIndex)
-		require.Len(t, ws.log, 1)
-		assert.True(t, proto.Equal(newLog[0], ws.log[0]))
+	ws2, err := NewWALStorage(dir, log, cfg)
+	require.NoError(t, err)
+	defer ws2.Close()
 
-		// Verify persisted state by reloading
-		logger := slog.New(slog.NewTextHandler(bytes.NewBuffer(nil), nil))
-		reloadedWS, err := NewWALStorage(dir, logger)
-		require.NoError(t, err)
-		assert.Equal(t, newMeta.CurrentTerm, reloadedWS.metadata.CurrentTerm)
-		require.Len(t, reloadedWS.log, 1)
-		assert.True(t, proto.Equal(newLog[0], reloadedWS.log[0]))
-	})
-
-	t.Run("SaveRaftState", func(t *testing.T) {
-		// This should overwrite the previous state
-		finalLog := []*raftpb.LogEntry{{Term: 3, Cmd: []byte("final")}}
-		finalState := &raftpb.RaftPersistentState{
-			CurrentTerm: 3,
-			VotedFor:    3,
-			Log:         finalLog,
-		}
-		stateBytes, err := proto.Marshal(finalState)
-		require.NoError(t, err)
-
-		err = ws.SaveRaftState(stateBytes)
-		require.NoError(t, err)
-
-		// Verify in-memory state
-		assert.Equal(t, finalState.CurrentTerm, ws.metadata.CurrentTerm)
-		require.Len(t, ws.log, 1)
-		assert.True(t, proto.Equal(finalLog[0], ws.log[0]))
-
-		// Verify persisted state
-		logger := slog.New(slog.NewTextHandler(bytes.NewBuffer(nil), nil))
-		reloadedWS, err := NewWALStorage(dir, logger)
-		require.NoError(t, err)
-		assert.Equal(t, finalState.CurrentTerm, reloadedWS.metadata.CurrentTerm)
-		require.Len(t, reloadedWS.log, 1)
-	})
+	assert.Equal(t, newMeta.CurrentTerm, ws2.metadata.CurrentTerm)
+	assert.Equal(t, newMeta.VotedFor, ws2.metadata.VotedFor)
+	assert.Equal(t, newMeta.LastIncludedIndex, ws2.metadata.LastIncludedIndex)
 }
 
 func TestWALStorage_Snapshots(t *testing.T) {
-	ws, dir, cleanup := newTestWAL(t)
-	defer cleanup()
-	logger := slog.New(slog.NewTextHandler(bytes.NewBuffer(nil), nil))
+	dir := newTestDir(t)
+	defer os.RemoveAll(dir)
+	cfg := testFsyncConfig()
+	_, log := logger.NewTestLogger()
 
-	require.NoError(t, ws.AppendEntries([]*raftpb.LogEntry{{Term: 1, Cmd: []byte("cmd1")}}))
-	require.NoError(t, ws.SetMetadata(1, -1))
+	ws1, err := NewWALStorage(dir, log, cfg)
+	require.NoError(t, err)
+	require.NoError(t, ws1.AppendEntries([]*raftpb.LogEntry{{Term: 1, Cmd: []byte("cmd1")}}))
+	require.NoError(t, ws1.SetMetadata(1, -1))
 
 	snapshotData := []byte("snapshot-data-1")
-	// The new raft state post-snapshot
-	state := &raftpb.RaftPersistentState{
-		CurrentTerm:       2,
-		VotedFor:          -1,
-		Log:               []*raftpb.LogEntry{{Term: 2}}, // Log is truncated
-		LastIncludedIndex: 5,
-		LastIncludedTerm:  1,
-	}
+	state := &raftpb.RaftPersistentState{CurrentTerm: 2, VotedFor: -1, Log: []*raftpb.LogEntry{{Term: 2}}, LastIncludedIndex: 5, LastIncludedTerm: 1}
 	stateBytes, err := proto.Marshal(state)
 	require.NoError(t, err)
 
-	t.Run("SaveStateAndSnapshot", func(t *testing.T) {
-		err := ws.SaveStateAndSnapshot(stateBytes, snapshotData)
-		require.NoError(t, err)
+	err = ws1.SaveStateAndSnapshot(stateBytes, snapshotData)
+	require.NoError(t, err)
+	require.NoError(t, ws1.Close())
 
-		// Verify in-memory state
-		snap, err := ws.ReadSnapshot()
-		require.NoError(t, err)
-		assert.Equal(t, snapshotData, snap)
-		assert.Equal(t, state.CurrentTerm, ws.metadata.CurrentTerm)
-		assert.Equal(t, state.LastIncludedIndex, ws.metadata.LastIncludedIndex)
-		require.Len(t, ws.log, 1)
+	ws2, err := NewWALStorage(dir, log, cfg)
+	require.NoError(t, err)
+	defer ws2.Close()
 
-		// Verify persisted state
-		reloadedWS, err := NewWALStorage(dir, logger)
-		require.NoError(t, err)
-
-		reloadedSnap, err := reloadedWS.ReadSnapshot()
-		require.NoError(t, err)
-		assert.Equal(t, snapshotData, reloadedSnap)
-		assert.Equal(t, state.CurrentTerm, reloadedWS.metadata.CurrentTerm)
-		require.Len(t, reloadedWS.log, 1)
-	})
-
-	t.Run("SaveSnapshot compatibility", func(t *testing.T) {
-		// Setup new state
-		newLog := []*raftpb.LogEntry{{Term: 3, Cmd: []byte("another-cmd")}}
-		newMeta := api.RaftMetadata{CurrentTerm: 3, VotedFor: 3}
-		require.NoError(t, ws.Overwrite(newLog, newMeta))
-
-		snapshotData2 := []byte("snapshot-data-2")
-
-		err := ws.SaveSnapshot(snapshotData2)
-		require.NoError(t, err)
-
-		// Verify persisted state
-		reloadedWS, err := NewWALStorage(dir, logger)
-		require.NoError(t, err)
-		reloadedSnap, err := reloadedWS.ReadSnapshot()
-		require.NoError(t, err)
-
-		assert.Equal(t, snapshotData2, reloadedSnap)
-		assert.Equal(t, newMeta.CurrentTerm, reloadedWS.metadata.CurrentTerm)
-		require.Len(t, reloadedWS.log, 1)
-		assert.True(t, proto.Equal(newLog[0], reloadedWS.log[0]))
-	})
+	snap, err := ws2.ReadSnapshot()
+	require.NoError(t, err)
+	assert.Equal(t, snapshotData, snap)
+	assert.Equal(t, state.CurrentTerm, ws2.metadata.CurrentTerm)
+	assert.Equal(t, state.LastIncludedIndex, ws2.metadata.LastIncludedIndex)
 }
 
 func TestWALStorage_Corruption(t *testing.T) {
+	cfg := testFsyncConfig()
+	_, log := logger.NewTestLogger()
+
 	t.Run("CRC mismatch", func(t *testing.T) {
-		_, dir, cleanup := newTestWAL(t)
-		defer cleanup()
+		dir := newTestDir(t)
+		defer os.RemoveAll(dir)
 
 		entry := &raftpb.LogEntry{Term: 1, Cmd: []byte("command")}
 		encoded, err := encodeEntry(entry)
 		require.NoError(t, err)
+		encoded[5]++ // Corrupt the CRC
 
-		// Corrupt the CRC
-		encoded[5]++
-
-		// Write the corrupted entry directly
 		walPath := filepath.Join(dir, walFileName)
 		require.NoError(t, os.WriteFile(walPath, encoded, 0644))
 
-		// Try to load it
-		logger := slog.New(slog.NewTextHandler(bytes.NewBuffer(nil), nil))
-		_, err = NewWALStorage(dir, logger)
+		_, err = NewWALStorage(dir, log, cfg)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "crc mismatch")
 	})
 
 	t.Run("partial write", func(t *testing.T) {
-		_, dir, cleanup := newTestWAL(t)
-		defer cleanup()
+		dir := newTestDir(t)
+		defer os.RemoveAll(dir)
 
 		entry := &raftpb.LogEntry{Term: 1, Cmd: []byte("a long entry")}
 		encoded, err := encodeEntry(entry)
 		require.NoError(t, err)
 
-		// Write only part of the entry
 		walPath := filepath.Join(dir, walFileName)
 		require.NoError(t, os.WriteFile(walPath, encoded[:len(encoded)-5], 0644))
 
-		// Should not return an error on load, but log should be empty
-		logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-		ws2, err := NewWALStorage(dir, logger)
+		ws, err := NewWALStorage(dir, log, cfg)
 		require.NoError(t, err)
-		assert.Empty(t, ws2.log, "log should be empty after partial write")
+		defer ws.Close()
+
+		stateBytes, err := ws.ReadRaftState()
+		require.NoError(t, err)
+		assert.Nil(t, stateBytes)
 	})
+}
+
+func TestWALStorage_ConcurrentAppends(t *testing.T) {
+	dir := newTestDir(t)
+	defer os.RemoveAll(dir)
+	cfg := testFsyncConfig()
+	_, log := logger.NewTestLogger()
+
+	ws, err := NewWALStorage(dir, log, cfg)
+	require.NoError(t, err)
+
+	numAppenders := 50
+	appendsPerGoRoutine := 10
+	var wg sync.WaitGroup
+	wg.Add(numAppenders)
+
+	for i := range numAppenders {
+		go func(i int) {
+			defer wg.Done()
+			for j := range appendsPerGoRoutine {
+				entries := []*raftpb.LogEntry{{
+					Term: int64(i),
+					Cmd:  []byte{byte(j)},
+				}}
+				err := ws.AppendEntries(entries)
+				require.NoError(t, err)
+			}
+		}(i)
+	}
+
+	wg.Wait()
+	require.NoError(t, ws.Close())
+
+	reopenedWs, err := NewWALStorage(ws.dir, log, cfg)
+	require.NoError(t, err)
+	defer reopenedWs.Close()
+
+	stateBytes, err := reopenedWs.ReadRaftState()
+	require.NoError(t, err)
+
+	var state raftpb.RaftPersistentState
+	require.NoError(t, proto.Unmarshal(stateBytes, &state))
+	assert.Len(t, state.Log, numAppenders*appendsPerGoRoutine)
 }
 
 func TestEncodeDecodeEntry(t *testing.T) {

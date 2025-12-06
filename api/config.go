@@ -11,6 +11,7 @@ type RaftConfig struct {
 	Log                LoggerCfg
 	Timings            RaftTimings
 	CBreaker           CircuitBreakerCfg
+	Fsync              FsyncCfg
 	HttpMonitoringAddr string
 	GRPCAddr           string
 	Snapshots          SnapshotsCfg
@@ -41,4 +42,9 @@ type CircuitBreakerCfg struct {
 	FailureThreshold int
 	SuccessThreshold int
 	ResetTimeout     time.Duration
+}
+
+type FsyncCfg struct {
+	BatchSize int
+	Timeout   time.Duration
 }

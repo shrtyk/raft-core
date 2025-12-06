@@ -17,11 +17,11 @@ type RaftMetadata struct {
 // It combines the methods for managing Raft state, snapshots,
 // and granular WAL operations for performance.
 type Persister interface {
-	// SaveRaftState persists the Raft state (current term, vote, and log entries).
-	SaveRaftState(state []byte) error
+	// AppendEntries adds a batch of new log entries to the WAL.
+	AppendEntries(entries []*raftpb.LogEntry) error
 
-	// SaveSnapshot persists the snapshot.
-	SaveSnapshot(snapshot []byte) error
+	// SetMetadata updates and persists the term and votedFor information.
+	SetMetadata(term int64, votedFor int64) error
 
 	// SaveStateAndSnapshot atomically replaces both the persisted Raft state and snapshot.
 	// After a crash, either both new values must be visible or neither.
@@ -38,13 +38,10 @@ type Persister interface {
 	// This is typically used only in tests.
 	RaftStateSize() (int, error)
 
-	// AppendEntries adds a batch of new log entries to the WAL.
-	AppendEntries(entries []*raftpb.LogEntry) error
-
-	// SetMetadata updates and persists the term and votedFor information.
-	SetMetadata(term int64, votedFor int64) error
-
 	// Overwrite atomically truncates and replaces the log and all associated metadata.
 	// This operation should be atomic; on failure, the old log and metadata should be preserved.
 	Overwrite(log []*raftpb.LogEntry, metadata RaftMetadata) error
+
+	// Close releases any underlying resources, like file handles.
+	Close() error
 }

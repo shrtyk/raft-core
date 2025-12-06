@@ -102,3 +102,7 @@ func (ps *MemPersister) Overwrite(log []*raftpb.LogEntry, meta api.RaftMetadata)
 	state.LastIncludedTerm = meta.LastIncludedTerm
 	return ps.save(state)
 }
+
+func (ps *MemPersister) Close() error {
+	return nil
+}
