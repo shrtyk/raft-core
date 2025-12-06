@@ -100,7 +100,7 @@ func (rf *Raft) AppendEntries(ctx context.Context, req *raftpb.AppendEntriesRequ
 		if termChanged {
 			stateCopy := rf.getPersistentStateBytes()
 			rf.mu.Unlock()
-			if err := rf.persister.SaveRaftState(stateCopy); err != nil {
+			if err := rf.persister.SaveStateAndSnapshot(stateCopy, nil); err != nil {
 				rf.handlePersistenceError("AppendEntries-inconsistent", err)
 			}
 		} else {
@@ -122,7 +122,7 @@ func (rf *Raft) AppendEntries(ctx context.Context, req *raftpb.AppendEntriesRequ
 	switch {
 	case didTruncate || termChanged:
 		stateCopy := rf.getPersistentStateBytes()
-		persistOp = func() error { return rf.persister.SaveRaftState(stateCopy) }
+		persistOp = func() error { return rf.persister.SaveStateAndSnapshot(stateCopy, nil) }
 	case len(appendedEntries) > 0:
 		entriesCopy := make([]*raftpb.LogEntry, len(appendedEntries))
 		for i, e := range appendedEntries {

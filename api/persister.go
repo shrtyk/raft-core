@@ -23,9 +23,6 @@ type Persister interface {
 	// SetMetadata updates and persists the term and votedFor information.
 	SetMetadata(term int64, votedFor int64) error
 
-	// SaveRaftState persists the Raft state (current term, vote, and log entries).
-	SaveRaftState(state []byte) error
-
 	// SaveStateAndSnapshot atomically replaces both the persisted Raft state and snapshot.
 	// After a crash, either both new values must be visible or neither.
 	SaveStateAndSnapshot(state, snapshot []byte) error
@@ -40,10 +37,6 @@ type Persister interface {
 	//
 	// This is typically used only in tests.
 	RaftStateSize() (int, error)
-
-	// Overwrite atomically truncates and replaces the log and all associated metadata.
-	// This operation should be atomic; on failure, the old log and metadata should be preserved.
-	Overwrite(log []*raftpb.LogEntry, metadata RaftMetadata) error
 
 	// Close releases any underlying resources, like file handles.
 	Close() error

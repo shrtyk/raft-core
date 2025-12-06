@@ -117,7 +117,7 @@ func TestWALStorage_StateOperations(t *testing.T) {
 	require.Len(t, state.Log, 1)
 }
 
-func TestWALStorage_Overwrite(t *testing.T) {
+func TestWALStorage_SaveStateAndSnapshot_Overwrite(t *testing.T) {
 	dir := newTestDir(t)
 	defer os.RemoveAll(dir)
 	cfg := testFsyncConfig()
@@ -129,9 +129,17 @@ func TestWALStorage_Overwrite(t *testing.T) {
 	require.NoError(t, ws1.SetMetadata(1, 1))
 
 	newLog := []*raftpb.LogEntry{{Term: 2, Cmd: []byte("new")}}
-	newMeta := api.RaftMetadata{CurrentTerm: 2, VotedFor: 2, LastIncludedIndex: 3, LastIncludedTerm: 2}
+	state := &raftpb.RaftPersistentState{
+		CurrentTerm:       2,
+		VotedFor:          2,
+		Log:               newLog,
+		LastIncludedIndex: 3,
+		LastIncludedTerm:  2,
+	}
+	stateBytes, err := proto.Marshal(state)
+	require.NoError(t, err)
 
-	err = ws1.Overwrite(newLog, newMeta)
+	err = ws1.SaveStateAndSnapshot(stateBytes, nil)
 	require.NoError(t, err)
 	require.NoError(t, ws1.Close())
 
@@ -139,9 +147,16 @@ func TestWALStorage_Overwrite(t *testing.T) {
 	require.NoError(t, err)
 	defer ws2.Close()
 
-	assert.Equal(t, newMeta.CurrentTerm, ws2.metadata.CurrentTerm)
-	assert.Equal(t, newMeta.VotedFor, ws2.metadata.VotedFor)
-	assert.Equal(t, newMeta.LastIncludedIndex, ws2.metadata.LastIncludedIndex)
+	assert.Equal(t, state.CurrentTerm, ws2.metadata.CurrentTerm)
+	assert.Equal(t, state.VotedFor, ws2.metadata.VotedFor)
+	assert.Equal(t, state.LastIncludedIndex, ws2.metadata.LastIncludedIndex)
+
+	reloadedStateBytes, err := ws2.ReadRaftState()
+	require.NoError(t, err)
+	var reloadedState raftpb.RaftPersistentState
+	err = proto.Unmarshal(reloadedStateBytes, &reloadedState)
+	require.NoError(t, err)
+	assert.True(t, proto.Equal(state, &reloadedState))
 }
 
 func TestWALStorage_Snapshots(t *testing.T) {

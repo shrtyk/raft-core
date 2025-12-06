@@ -30,6 +30,10 @@ const (
 
 const entryHeaderSize = 8 // 4 bytes for length, 4 for CRC
 
+//  ______________________________________________________________ ...
+// | Key+Value length (4 byte) | CRC Hash (4 byte) |   Key+Value   ...
+// |___________________________|___________________|______________ ...
+
 var (
 	crc32cTable = crc32.MakeTable(crc32.Castagnoli)
 )
@@ -47,10 +51,7 @@ type opType int
 const (
 	opAppendEntries opType = iota
 	opSetMetadata
-	opOverwrite
 	opSaveStateAndSnapshot
-	opSaveRaftState
-	opSaveSnapshot
 )
 
 // persistRequest is a request sent to the persister worker.
@@ -132,14 +133,26 @@ func (ws *WALStorage) submitRequest(op opType, data any) error {
 	return <-req.errChan
 }
 
+// stopTimer safely stops a timer and drains its channel if the stop fails.
+// This is the required pattern for reusing a timer.
+func stopTimer(t *time.Timer) {
+	if !t.Stop() {
+		// The timer fired before we could stop it.
+		// We must drain the channel to prevent a spurious wakeup.
+		select {
+		case <-t.C:
+		default:
+			// The channel was already drained, do nothing.
+		}
+	}
+}
+
 // persister is the background worker that batches and writes to disk.
 func (ws *WALStorage) persister() {
 	defer ws.wg.Done()
 	batch := make([]*persistRequest, 0, ws.fsyncCfg.BatchSize)
 	timer := time.NewTimer(ws.fsyncCfg.Timeout)
-	if !timer.Stop() {
-		<-timer.C
-	}
+	stopTimer(timer)
 
 	for {
 		select {
@@ -152,18 +165,14 @@ func (ws *WALStorage) persister() {
 				if len(batch) >= ws.fsyncCfg.BatchSize {
 					ws.flush(batch)
 					batch = batch[:0]
-					if !timer.Stop() {
-						<-timer.C
-					}
+					stopTimer(timer)
 				}
 			} else {
 				// For non-append ops, flush any pending batch first.
 				if len(batch) > 0 {
 					ws.flush(batch)
 					batch = batch[:0]
-					if !timer.Stop() {
-						<-timer.C
-					}
+					stopTimer(timer)
 				}
 				ws.handleSyncOp(req)
 			}
@@ -188,16 +197,9 @@ func (ws *WALStorage) handleSyncOp(req *persistRequest) {
 	case opSetMetadata:
 		data := req.data.([2]int64)
 		err = ws.setMetadata(data[0], data[1])
-	case opOverwrite:
-		data := req.data.([]any)
-		err = ws.overwrite(data[0].([]*raftpb.LogEntry), data[1].(api.RaftMetadata))
 	case opSaveStateAndSnapshot:
 		data := req.data.([2][]byte)
 		err = ws.saveStateAndSnapshot(data[0], data[1])
-	case opSaveRaftState:
-		err = ws.saveRaftState(req.data.([]byte))
-	case opSaveSnapshot:
-		err = ws.saveSnapshot(req.data.([]byte))
 	default:
 		err = fmt.Errorf("unknown op type: %v", req.op)
 	}
@@ -316,54 +318,6 @@ func (ws *WALStorage) setMetadata(term, votedFor int64) error {
 	return nil
 }
 
-func (ws *WALStorage) Overwrite(log []*raftpb.LogEntry, metadata api.RaftMetadata) error {
-	return ws.submitRequest(opOverwrite, []any{log, metadata})
-}
-
-func (ws *WALStorage) overwrite(log []*raftpb.LogEntry, metadata api.RaftMetadata) error {
-	ws.mu.Lock()
-	defer ws.mu.Unlock()
-
-	walBuf := new(bytes.Buffer)
-	for _, entry := range log {
-		encoded, err := encodeEntry(entry)
-		if err != nil {
-			return fmt.Errorf("failed to encode entry for overwrite: %w", err)
-		}
-		walBuf.Write(encoded)
-	}
-
-	newMeta := walMetadata{
-		CurrentTerm:       metadata.CurrentTerm,
-		VotedFor:          metadata.VotedFor,
-		LastIncludedIndex: metadata.LastIncludedIndex,
-		LastIncludedTerm:  metadata.LastIncludedTerm,
-	}
-	metaBytes, err := json.Marshal(newMeta)
-	if err != nil {
-		return fmt.Errorf("failed to marshal metadata for overwrite: %w", err)
-	}
-
-	if err := ws.walFile.Close(); err != nil {
-		return fmt.Errorf("failed to close WAL file before overwrite: %w", err)
-	}
-
-	if err := syncFile(ws.walPath, walBuf.Bytes(), 0644); err != nil {
-		return fmt.Errorf("failed to sync WAL file for overwrite: %w", err)
-	}
-	if err := syncFile(ws.metadataPath, metaBytes, 0644); err != nil {
-		return fmt.Errorf("failed to sync metadata file for overwrite: %w", err)
-	}
-
-	newWalFile, err := os.OpenFile(ws.walPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return fmt.Errorf("failed to reopen WAL file after overwrite: %w", err)
-	}
-	ws.walFile = newWalFile
-	ws.metadata = newMeta
-	return nil
-}
-
 func (ws *WALStorage) ReadRaftState() ([]byte, error) {
 	ws.mu.RLock()
 	defer ws.mu.RUnlock()
@@ -410,54 +364,6 @@ func (ws *WALStorage) ReadSnapshot() ([]byte, error) {
 	return snapData, nil
 }
 
-func (ws *WALStorage) SaveRaftState(state []byte) error {
-	if state == nil {
-		return nil
-	}
-	return ws.submitRequest(opSaveRaftState, state)
-}
-
-func (ws *WALStorage) saveRaftState(state []byte) error {
-	ps := &raftpb.RaftPersistentState{}
-	if err := proto.Unmarshal(state, ps); err != nil {
-		return fmt.Errorf("failed to unmarshal state for overwrite: %w", err)
-	}
-	metadata := api.RaftMetadata{
-		CurrentTerm:       ps.CurrentTerm,
-		VotedFor:          ps.VotedFor,
-		LastIncludedIndex: ps.LastIncludedIndex,
-		LastIncludedTerm:  ps.LastIncludedTerm,
-	}
-	return ws.overwrite(ps.Log, metadata)
-}
-
-func (ws *WALStorage) SaveSnapshot(snapshot []byte) error {
-	return ws.submitRequest(opSaveSnapshot, snapshot)
-}
-
-func (ws *WALStorage) saveSnapshot(snapshot []byte) error {
-	log, err := ws.readLog()
-	if err != nil {
-		return fmt.Errorf("failed to read log for SaveSnapshot: %w", err)
-	}
-
-	ws.mu.RLock()
-	state := &raftpb.RaftPersistentState{
-		CurrentTerm:       ws.metadata.CurrentTerm,
-		VotedFor:          ws.metadata.VotedFor,
-		Log:               log,
-		LastIncludedIndex: ws.metadata.LastIncludedIndex,
-		LastIncludedTerm:  ws.metadata.LastIncludedTerm,
-	}
-	ws.mu.RUnlock()
-
-	stateBytes, err := proto.Marshal(state)
-	if err != nil {
-		return err
-	}
-	return ws.saveStateAndSnapshot(stateBytes, snapshot)
-}
-
 func (ws *WALStorage) SaveStateAndSnapshot(state, snapshot []byte) error {
 	return ws.submitRequest(opSaveStateAndSnapshot, [2][]byte{state, snapshot})
 }
@@ -495,13 +401,18 @@ func (ws *WALStorage) saveStateAndSnapshot(state, snapshot []byte) error {
 		return fmt.Errorf("failed to marshal metadata for snapshot: %w", err)
 	}
 
-	if err := ws.walFile.Close(); err != nil {
-		ws.logger.Warn("failed to close WAL file before snapshot", logger.ErrAttr(err))
+	if ws.walFile != nil {
+		if err := ws.walFile.Close(); err != nil {
+			ws.logger.Warn("failed to close WAL file before snapshot", logger.ErrAttr(err))
+		}
 	}
 
-	if err := syncFile(ws.snapshotPath, snapshot, 0644); err != nil {
-		return fmt.Errorf("failed to sync snapshot file: %w", err)
+	if snapshot != nil {
+		if err := syncFile(ws.snapshotPath, snapshot, 0644); err != nil {
+			return fmt.Errorf("failed to sync snapshot file: %w", err)
+		}
 	}
+
 	if err := syncFile(ws.walPath, walBuf.Bytes(), 0644); err != nil {
 		return fmt.Errorf("failed to sync WAL file for snapshot: %w", err)
 	}

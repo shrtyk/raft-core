@@ -55,6 +55,9 @@ func (ps *MemPersister) SaveSnapshot(snapshot []byte) error {
 }
 
 func (ps *MemPersister) SaveStateAndSnapshot(state, snapshot []byte) error {
+	if snapshot == nil {
+		snapshot = ps.p.ReadSnapshot()
+	}
 	ps.p.Save(state, snapshot)
 	return nil
 }
@@ -87,19 +90,6 @@ func (ps *MemPersister) SetMetadata(term int64, votedFor int64) error {
 	}
 	state.CurrentTerm = term
 	state.VotedFor = votedFor
-	return ps.save(state)
-}
-
-func (ps *MemPersister) Overwrite(log []*raftpb.LogEntry, meta api.RaftMetadata) error {
-	state, err := ps.readState()
-	if err != nil {
-		return err
-	}
-	state.Log = log
-	state.CurrentTerm = meta.CurrentTerm
-	state.VotedFor = meta.VotedFor
-	state.LastIncludedIndex = meta.LastIncludedIndex
-	state.LastIncludedTerm = meta.LastIncludedTerm
 	return ps.save(state)
 }
 
