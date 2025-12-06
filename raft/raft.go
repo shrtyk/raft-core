@@ -22,12 +22,12 @@ type Raft struct {
 	//
 	// Lock mu -> update persistence state -> make a copy state -> lock pmu -> unlock mu -> persist copy of state -> unlock pmu
 	pmu        sync.RWMutex
-	peersCount int              // Amount of peers in cluster
-	transport  api.Transport    // RPC clients layer abstraction
+	peersCount int           // Amount of peers in cluster
+	transport  api.Transport // RPC clients layer abstraction
 	persister  api.Persister // Persistence layer abstraction (should be concurrent safe)
-	me         int              // this peer's index
-	leaderId   int              // ID of the current leader
-	dead       int32            // set by Stop()
+	me         int           // this peer's index
+	leaderId   int           // ID of the current leader
+	dead       int32         // set by Stop()
 
 	state State           // State of the peer
 	cfg   *api.RaftConfig // Config of the peer
@@ -142,6 +142,13 @@ func (rf *Raft) Stop() error {
 	}
 
 	rf.wg.Wait()
+
+	if rf.persister != nil {
+		if perr := rf.persister.Close(); perr != nil {
+			err = errors.Join(err, fmt.Errorf("failed to close persister: %w", perr))
+		}
+	}
+
 	return err
 }
 
@@ -173,6 +180,7 @@ func (rf *Raft) Submit(command []byte) *api.SubmitResult {
 	rf.nextIdx[rf.me] = lastLogIdx + 1
 
 	rf.mu.Unlock()
+
 	pErr := rf.persister.AppendEntries([]*raftpb.LogEntry{newEntry})
 
 	// If persistence fails, the node must not continue as leader,
@@ -187,8 +195,11 @@ func (rf *Raft) Submit(command []byte) *api.SubmitResult {
 		rf.mu.Unlock()
 		return res
 	}
+
 	res.LogIndex = lastLogIdx
 	res.IsLeader = true
+
+	rf.heartbeatTicker.Reset(rf.cfg.Timings.HeartbeatTimeout)
 	go rf.sendSnapshotOrEntries()
 
 	return res

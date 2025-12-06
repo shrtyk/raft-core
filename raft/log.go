@@ -48,30 +48,34 @@ func (rf *Raft) isLogConsistent(prevLogIdx int64, prevLogTerm int64) bool {
 	return rf.getTerm(prevLogIdx) == prevLogTerm
 }
 
-// processEntries handles appending/truncating entries to the follower's log
-// and returns true if there is need to persist
+// processEntries handles appending/truncating entries to the follower's log.
+// It returns a boolean indicating if truncation occurred, and a slice of the entries that were appended.
 //
-// Assumes the lock is held when called
-func (rf *Raft) processEntries(req *raftpb.AppendEntriesRequest) (didTruncate bool, didAppend bool) {
+// Assumes the lock is held when called.
+func (rf *Raft) processEntries(req *raftpb.AppendEntriesRequest) (didTruncate bool, appendedEntries []*raftpb.LogEntry) {
 	for i, entry := range req.Entries {
 		absIdx := req.PrevLogIndex + 1 + int64(i)
 		lastAbsIdx, _ := rf.lastLogIdxAndTerm()
+
 		if absIdx > lastAbsIdx {
-			rf.log = append(rf.log, req.Entries[i:]...)
-			didAppend = true
-			break
+			appendedEntries = req.Entries[i:]
+			rf.log = append(rf.log, appendedEntries...)
+			for _, e := range appendedEntries {
+				rf.logSizeInBytes += len(e.Cmd)
+			}
+			return false, appendedEntries
 		}
 
 		if rf.getTerm(absIdx) != entry.Term {
 			sliceIdx := absIdx - rf.lastIncludedIndex - 1
 			rf.log = rf.log[:sliceIdx]
-			rf.log = append(rf.log, req.Entries[i:]...)
-			didTruncate = true
-			didAppend = true
-			break
+			appendedEntries = req.Entries[i:]
+			rf.log = append(rf.log, appendedEntries...)
+			rf.logSizeInBytes = rf.calculateLogSizeInBytes() // Recalculate size after truncation
+			return true, appendedEntries
 		}
 	}
-	return
+	return false, nil
 }
 
 // fillConflictReply sets the conflict fields in an AppendEntries reply

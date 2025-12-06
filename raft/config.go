@@ -31,6 +31,10 @@ func DefaultConfig() *api.RaftConfig {
 			SuccessThreshold: 4,
 			ResetTimeout:     5 * time.Second,
 		},
+		Fsync: api.FsyncCfg{
+			BatchSize: 128,
+			Timeout:   15 * time.Millisecond,
+		},
 		Snapshots: api.SnapshotsCfg{
 			CheckLogSizeInterval: 30 * time.Second,
 			ThresholdBytes:       0,
@@ -57,6 +61,10 @@ func TestsConfig() *api.RaftConfig {
 			FailureThreshold: 6,
 			SuccessThreshold: 4,
 			ResetTimeout:     5 * time.Second,
+		},
+		Fsync: api.FsyncCfg{
+			BatchSize: 10,
+			Timeout:   10 * time.Millisecond,
 		},
 		Snapshots: api.SnapshotsCfg{
 			CheckLogSizeInterval: 30 * time.Second,

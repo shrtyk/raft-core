@@ -4,6 +4,7 @@ import (
 	"context"
 
 	raftpb "github.com/shrtyk/raft-core/internal/proto/gen"
+	"google.golang.org/protobuf/proto"
 )
 
 func (rf *Raft) RequestVote(ctx context.Context, req *raftpb.RequestVoteRequest) (reply *raftpb.RequestVoteResponse, err error) {
@@ -68,52 +69,77 @@ func (rf *Raft) RequestVote(ctx context.Context, req *raftpb.RequestVoteRequest)
 
 func (rf *Raft) AppendEntries(ctx context.Context, req *raftpb.AppendEntriesRequest) (reply *raftpb.AppendEntriesResponse, err error) {
 	reply = &raftpb.AppendEntriesResponse{}
-	var needToPersist bool
-	var shouldSignalApplier bool
-
 	rf.mu.Lock()
-	defer func() {
-		if pErr := rf.unlockConditionally(needToPersist, nil); pErr != nil {
-			rf.handlePersistenceError("AppendEntries", pErr)
-			return
-		}
-		if shouldSignalApplier {
-			rf.signalApplier()
-		}
-	}()
+
+	if req.Term < rf.curTerm {
+		reply.Term = rf.curTerm
+		rf.mu.Unlock()
+		return
+	}
 
 	if len(req.Entries) > 0 {
 		rf.logger.Debug("append entries received", "leader_id", req.LeaderId, "term", req.Term, "num_entries", len(req.Entries))
 	}
 
-	if req.Term < rf.curTerm {
-		reply.Term = rf.curTerm
-		return
-	}
-
 	rf.resetElectionTimer()
 
+	termChanged := false
 	if req.Term > rf.curTerm || rf.isState(candidate) {
 		rf.becomeFollower(req.Term)
-		needToPersist = true
+		termChanged = true
 	}
 	rf.leaderId = int(req.LeaderId)
 	reply.Term = rf.curTerm
 
 	if !rf.isLogConsistent(req.PrevLogIndex, req.PrevLogTerm) {
 		rf.fillConflictReply(req, reply)
+		if termChanged {
+			stateCopy := rf.getPersistentStateBytes()
+			rf.mu.Unlock() // Unlock before I/O
+			if err := rf.persister.SaveRaftState(stateCopy); err != nil {
+				rf.handlePersistenceError("AppendEntries-inconsistent", err)
+			}
+		} else {
+			rf.mu.Unlock()
+		}
 		return
 	}
 
-	didTruncate, didAppend := rf.processEntries(req)
-	if didTruncate || didAppend {
-		needToPersist = true
-	}
+	didTruncate, appendedEntries := rf.processEntries(req)
 
+	var shouldSignalApplier bool
 	if req.LeaderCommitIndex > rf.commitIdx {
 		lastLogIndex, _ := rf.lastLogIdxAndTerm()
 		rf.commitIdx = min(req.LeaderCommitIndex, lastLogIndex)
 		shouldSignalApplier = true
+	}
+
+	var persistOp func() error
+	if didTruncate {
+		stateCopy := rf.getPersistentStateBytes()
+		persistOp = func() error { return rf.persister.SaveRaftState(stateCopy) }
+	} else if len(appendedEntries) > 0 {
+		entriesCopy := make([]*raftpb.LogEntry, len(appendedEntries))
+		for i, e := range appendedEntries {
+			entriesCopy[i] = proto.Clone(e).(*raftpb.LogEntry)
+		}
+		persistOp = func() error { return rf.persister.AppendEntries(entriesCopy) }
+	} else if termChanged {
+		stateCopy := rf.getPersistentStateBytes()
+		persistOp = func() error { return rf.persister.SaveRaftState(stateCopy) }
+	}
+
+	rf.mu.Unlock() // Unlock before I/O.
+
+	if persistOp != nil {
+		if perr := persistOp(); perr != nil {
+			rf.handlePersistenceError("AppendEntries", perr)
+			return
+		}
+	}
+
+	if shouldSignalApplier {
+		rf.signalApplier()
 	}
 
 	reply.Success = true
