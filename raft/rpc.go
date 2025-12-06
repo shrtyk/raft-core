@@ -9,12 +9,16 @@ import (
 
 func (rf *Raft) RequestVote(ctx context.Context, req *raftpb.RequestVoteRequest) (reply *raftpb.RequestVoteResponse, err error) {
 	reply = &raftpb.RequestVoteResponse{}
-	var needToPersist bool
+	var persistMetadata bool
 
 	rf.mu.Lock()
 	defer func() {
-		if pErr := rf.unlockConditionally(needToPersist, nil); pErr != nil {
-			rf.handlePersistenceError("RequestVote", pErr)
+		if persistMetadata {
+			if pErr := rf.persistMetadataAndUnlock(); pErr != nil {
+				rf.handlePersistenceError("RequestVote", pErr)
+			}
+		} else {
+			rf.mu.Unlock()
 		}
 	}()
 
@@ -28,7 +32,7 @@ func (rf *Raft) RequestVote(ctx context.Context, req *raftpb.RequestVoteRequest)
 
 	if req.Term > rf.curTerm {
 		rf.becomeFollower(req.Term)
-		needToPersist = true
+		persistMetadata = true
 	}
 
 	reply.Term = rf.curTerm
@@ -56,7 +60,7 @@ func (rf *Raft) RequestVote(ctx context.Context, req *raftpb.RequestVoteRequest)
 
 	reply.VoteGranted = true
 	rf.votedFor = req.CandidateId
-	needToPersist = true
+	persistMetadata = true
 	rf.resetElectionTimer()
 	rf.logger.Info(
 		"voting for candidate",
@@ -95,7 +99,7 @@ func (rf *Raft) AppendEntries(ctx context.Context, req *raftpb.AppendEntriesRequ
 		rf.fillConflictReply(req, reply)
 		if termChanged {
 			stateCopy := rf.getPersistentStateBytes()
-			rf.mu.Unlock() // Unlock before I/O
+			rf.mu.Unlock()
 			if err := rf.persister.SaveRaftState(stateCopy); err != nil {
 				rf.handlePersistenceError("AppendEntries-inconsistent", err)
 			}
@@ -115,21 +119,19 @@ func (rf *Raft) AppendEntries(ctx context.Context, req *raftpb.AppendEntriesRequ
 	}
 
 	var persistOp func() error
-	if didTruncate {
+	switch {
+	case didTruncate || termChanged:
 		stateCopy := rf.getPersistentStateBytes()
 		persistOp = func() error { return rf.persister.SaveRaftState(stateCopy) }
-	} else if len(appendedEntries) > 0 {
+	case len(appendedEntries) > 0:
 		entriesCopy := make([]*raftpb.LogEntry, len(appendedEntries))
 		for i, e := range appendedEntries {
 			entriesCopy[i] = proto.Clone(e).(*raftpb.LogEntry)
 		}
 		persistOp = func() error { return rf.persister.AppendEntries(entriesCopy) }
-	} else if termChanged {
-		stateCopy := rf.getPersistentStateBytes()
-		persistOp = func() error { return rf.persister.SaveRaftState(stateCopy) }
 	}
 
-	rf.mu.Unlock() // Unlock before I/O.
+	rf.mu.Unlock()
 
 	if persistOp != nil {
 		if perr := persistOp(); perr != nil {

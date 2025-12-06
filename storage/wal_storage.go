@@ -122,7 +122,7 @@ func (ws *WALStorage) Close() error {
 }
 
 // submitRequest sends a request to the persister worker and waits for a response.
-func (ws *WALStorage) submitRequest(op opType, data interface{}) error {
+func (ws *WALStorage) submitRequest(op opType, data any) error {
 	req := &persistRequest{
 		op:      op,
 		data:    data,
@@ -247,7 +247,7 @@ func (ws *WALStorage) load() error {
 	f, err := os.Open(ws.walPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil // No WAL file is not an error
+			return nil
 		}
 		return fmt.Errorf("failed to open WAL file for validation: %w", err)
 	}

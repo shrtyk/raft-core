@@ -55,6 +55,17 @@ func (rf *Raft) persistAndUnlock(snapshot []byte) error {
 	return rf.persister.SaveStateAndSnapshot(state, snapshot)
 }
 
+// persistMetadataAndUnlock captures the current term and votedFor, unlocks the main mutex,
+// and then persists only the metadata.
+//
+// It must be called with rf.mu held, and it will unlock it.
+func (rf *Raft) persistMetadataAndUnlock() error {
+	term := rf.curTerm
+	votedFor := rf.votedFor
+	rf.mu.Unlock()
+	return rf.persister.SetMetadata(term, votedFor)
+}
+
 // unlockConditionally unlocks the main mutex, and persists the state if needed
 //
 // It must be called with rf.mu held, and it will unlock it
