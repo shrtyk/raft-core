@@ -14,28 +14,25 @@ import (
 	"github.com/shrtyk/raft-core/pkg/logger"
 )
 
-// A Go object implementing a single Raft peer.
+// An implementation of a single Raft peer.
 type Raft struct {
-	wg sync.WaitGroup
-	mu sync.RWMutex // Lock to protect shared access to this peer's state
-	// Lock for persistence writes to provide atomicity of operations without holding global lock.
-	//
-	// Lock mu -> update persistence state -> make a copy state -> lock pmu -> unlock mu -> persist copy of state -> unlock pmu
-	pmu        sync.RWMutex
-	peersCount int           // Amount of peers in cluster
-	transport  api.Transport // RPC clients layer abstraction
-	persister  api.Persister // Persistence layer abstraction (should be concurrent safe)
-	me         int           // this peer's index
-	leaderId   int           // ID of the current leader
-	dead       int32         // set by Stop()
+	wg sync.WaitGroup // Global lock to protect node state.
+	mu sync.RWMutex   // Lock to protect shared access to this peer's state.
 
-	state State           // State of the peer
-	cfg   *api.RaftConfig // Config of the peer
+	peersCount int   // Amount of peers in cluster.
+	me         int   // This peer's index.
+	leaderId   int   // ID of the current leader.
+	dead       int32 // Set by Stop().
 
-	// Lock to provide atomic timers updates.
-	//
-	// lock timerMu -> stop one of the timers -> reser another one -> unlock timerMu
-	timerMu                   sync.Mutex
+	state State           // State of the peer.
+	cfg   *api.RaftConfig // Config of the peer.
+
+	pmu       sync.RWMutex  // Lock for persistence writes to provide atomicity of operations without holding global lock.
+	persister api.Persister // Persistence layer abstraction (should be concurrent safe).
+	fsm       api.FSM       // Application finite state machine abstraction to be implemented by clients.
+	transport api.Transport // RPC clients layer abstraction.
+
+	timerMu                   sync.Mutex // Lock to provide atomic timers updates.
 	electionTimer             *time.Timer
 	heartbeatTicker           *time.Ticker
 	lastHeartbeatMajorityTime time.Time
@@ -46,31 +43,27 @@ type Raft struct {
 
 	// Persistent state:
 
-	curTerm        int64              // latest term server has seen
-	votedFor       int64              // index of peer in peers
-	log            []*raftpb.LogEntry // log entries
+	curTerm        int64              // Latest term server has seen.
+	votedFor       int64              // Index of peer in peers.
+	log            []*raftpb.LogEntry // Log entries.
 	logSizeInBytes int
 
 	// Volatile state on all servers:
 
-	// index of highest log entry known to be committed
-	commitIdx int64
-	// index of the highest log entry applied to state machine
-	lastAppliedIdx int64
+	commitIdx      int64 // Index of highest log entry known to be committed.
+	lastAppliedIdx int64 // Index of the highest log entry applied to state machine.
 
 	// Volatile state leaders only (reinitialized after election):
 
-	// for each server, index of the next log entry
-	// to send to that server (initialized to leader last log index + 1)
+	// For each server, index of the next log entry
+	// to send to that server (initialized to leader last log index + 1).
 	nextIdx []int64
-	// for each server, index of highest log entry known
-	// to be replicated on server (initialized to 0, increases monotonically)
+	// For each server, index of highest log entry known
+	// to be replicated on server (initialized to 0, increases monotonically).
 	matchIdx []int64
 
-	// the index of the last entry in the log that the snapshot replaces
-	lastIncludedIndex int64
-	// the term of the last entry in the log that the snapshot replaces
-	lastIncludedTerm int64
+	lastIncludedIndex int64 // Index of the last entry in the log that the snapshot replaces.
+	lastIncludedTerm  int64 // Term of the last entry in the log that the snapshot replaces.
 
 	raftCtx    context.Context
 	raftCancel func()
@@ -78,7 +71,7 @@ type Raft struct {
 
 	monitoringServer MonitoringServer
 	grpcServer       GRPCServer
-	fsm              api.FSM
+
 	raftpb.UnimplementedRaftServiceServer
 }
 
