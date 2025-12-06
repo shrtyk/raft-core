@@ -7,9 +7,9 @@ import (
 
 func (rf *Raft) Snapshot(index int64, snapshot []byte) error {
 	rf.mu.Lock()
-	defer rf.mu.Unlock()
 
 	if index <= rf.lastIncludedIndex {
+		rf.mu.Unlock()
 		return api.ErrOldSnapshot
 	}
 
@@ -27,5 +27,8 @@ func (rf *Raft) Snapshot(index int64, snapshot []byte) error {
 	rf.lastIncludedTerm = term
 
 	data := rf.getPersistentStateBytes()
+
+	rf.mu.Unlock()
+
 	return rf.persister.SaveStateAndSnapshot(data, snapshot)
 }
