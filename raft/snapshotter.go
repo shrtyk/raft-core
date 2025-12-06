@@ -33,7 +33,7 @@ func (rf *Raft) snapshotter() {
 
 func (rf *Raft) checkAndTakeSnapshot() {
 	rf.mu.RLock()
-	size := rf.logSizeInBytes
+	size := rf.log.logSizeInBytes
 	rf.mu.RUnlock()
 
 	if size < rf.cfg.Snapshots.ThresholdBytes {

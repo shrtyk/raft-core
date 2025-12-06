@@ -36,8 +36,8 @@ func (rf *Raft) RequestVote(ctx context.Context, req *raftpb.RequestVoteRequest)
 	}
 
 	reply.Term = rf.curTerm
-	if !rf.isCandidateLogUpToDate(req.LastLogIndex, req.LastLogTerm) {
-		myLastLogIdx, myLastLogTerm := rf.lastLogIdxAndTerm()
+	if !rf.log.isCandidateLogUpToDate(req.LastLogIndex, req.LastLogTerm) {
+		myLastLogIdx, myLastLogTerm := rf.log.lastLogIdxAndTerm()
 		rf.logger.Warn(
 			"denying vote, candidate log not up-to-date",
 			"candidate_id", req.CandidateId,
@@ -95,8 +95,8 @@ func (rf *Raft) AppendEntries(ctx context.Context, req *raftpb.AppendEntriesRequ
 	rf.leaderId = int(req.LeaderId)
 	reply.Term = rf.curTerm
 
-	if !rf.isLogConsistent(req.PrevLogIndex, req.PrevLogTerm) {
-		rf.fillConflictReply(req, reply)
+	if !rf.log.isLogConsistent(req.PrevLogIndex, req.PrevLogTerm) {
+		rf.log.fillConflictReply(req, reply)
 		if termChanged {
 			stateCopy := rf.getPersistentStateBytes()
 			rf.mu.Unlock()
@@ -109,11 +109,11 @@ func (rf *Raft) AppendEntries(ctx context.Context, req *raftpb.AppendEntriesRequ
 		return
 	}
 
-	didTruncate, appendedEntries := rf.processEntries(req)
+	didTruncate, appendedEntries := rf.log.processEntries(req)
 
 	var shouldSignalApplier bool
 	if req.LeaderCommitIndex > rf.commitIdx {
-		lastLogIndex, _ := rf.lastLogIdxAndTerm()
+		lastLogIndex, _ := rf.log.lastLogIdxAndTerm()
 		rf.commitIdx = min(req.LeaderCommitIndex, lastLogIndex)
 		shouldSignalApplier = true
 	}
@@ -164,7 +164,7 @@ func (rf *Raft) InstallSnapshot(ctx context.Context, req *raftpb.InstallSnapshot
 	rf.leaderId = int(req.LeaderId)
 	rf.resetElectionTimer()
 
-	if req.LastIncludedIndex <= rf.lastIncludedIndex {
+	if req.LastIncludedIndex <= rf.log.lastIncludedIndex {
 		rf.mu.Unlock()
 		return
 	}
@@ -175,16 +175,8 @@ func (rf *Raft) InstallSnapshot(ctx context.Context, req *raftpb.InstallSnapshot
 		"last_included_index", req.LastIncludedIndex,
 	)
 
-	sliceIndex := req.LastIncludedIndex - rf.lastIncludedIndex
-	if sliceIndex < int64(len(rf.log)) && rf.getTerm(req.LastIncludedIndex) == req.LastIncludedTerm {
-		rf.log = append([]*raftpb.LogEntry(nil), rf.log[sliceIndex:]...)
-	} else {
-		rf.log = nil
-	}
-
-	rf.lastIncludedIndex = req.LastIncludedIndex
-	rf.lastIncludedTerm = req.LastIncludedTerm
-	rf.commitIdx = max(rf.commitIdx, rf.lastIncludedIndex)
+	rf.log.compact(req.LastIncludedIndex, req.LastIncludedTerm)
+	rf.commitIdx = max(rf.commitIdx, rf.log.lastIncludedIndex)
 
 	if pErr := rf.persistAndUnlock(req.Data); pErr != nil {
 		rf.handlePersistenceError("InstallSnapshot", pErr)

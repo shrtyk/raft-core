@@ -1,126 +1,149 @@
 package raft
 
-import raftpb "github.com/shrtyk/raft-core/internal/proto/gen"
+import (
+	raftpb "github.com/shrtyk/raft-core/internal/proto/gen"
+)
 
-// getTerm returns the term of a log entry at a given absolute index.
-// It handles cases where the index is part of a snapshot
-//
-// Assumes the lock is held when called
-func (rf *Raft) getTerm(idx int64) int64 {
-	if idx == rf.lastIncludedIndex {
-		return rf.lastIncludedTerm
-	}
-
-	if idx < rf.lastIncludedIndex {
-		return -1
-	}
-
-	sliceIndex := idx - rf.lastIncludedIndex - 1
-	if sliceIndex >= int64(len(rf.log)) {
-		return -1
-	}
-	return rf.log[sliceIndex].Term
+// raftLog is a component of a Raft node that manages the Raft log.
+// It is not safe for concurrent access; the parent Raft node is responsible for synchronization.
+type raftLog struct {
+	entries           []*raftpb.LogEntry
+	lastIncludedIndex int64
+	lastIncludedTerm  int64
+	logSizeInBytes    int
 }
 
-// lastLogIdxAndTerm returns the index and term of the last entry in the log
-//
-// Assumes the lock is held when called
-func (rf *Raft) lastLogIdxAndTerm() (lastLogIdx, lastLogTerm int64) {
-	if len(rf.log) > 0 {
-		lastLogIdx = rf.lastIncludedIndex + int64(len(rf.log))
-		lastLogTerm = rf.log[len(rf.log)-1].Term
+func newLog(lastIncludedIndex, lastIncludedTerm int64, entries []*raftpb.LogEntry) *raftLog {
+	rl := &raftLog{
+		entries:           entries,
+		lastIncludedIndex: lastIncludedIndex,
+		lastIncludedTerm:  lastIncludedTerm,
+	}
+	rl.logSizeInBytes = rl.calculateLogSizeInBytes()
+	return rl
+}
+
+// getTerm returns the term of a log entry at a given absolute index.
+// It handles cases where the index is part of a snapshot.
+func (rl *raftLog) getTerm(idx int64) int64 {
+	if idx == rl.lastIncludedIndex {
+		return rl.lastIncludedTerm
+	}
+
+	if idx < rl.lastIncludedIndex {
+		return -1
+	}
+
+	sliceIndex := idx - rl.lastIncludedIndex - 1
+	if sliceIndex < 0 || sliceIndex >= int64(len(rl.entries)) {
+		return -1
+	}
+	return rl.entries[sliceIndex].Term
+}
+
+// lastLogIdxAndTerm returns the index and term of the last entry in the log.
+func (rl *raftLog) lastLogIdxAndTerm() (lastLogIdx, lastLogTerm int64) {
+	if len(rl.entries) > 0 {
+		lastLogIdx = rl.lastIncludedIndex + int64(len(rl.entries))
+		lastLogTerm = rl.entries[len(rl.entries)-1].Term
 	} else {
-		lastLogIdx = rf.lastIncludedIndex
-		lastLogTerm = rf.lastIncludedTerm
+		lastLogIdx = rl.lastIncludedIndex
+		lastLogTerm = rl.lastIncludedTerm
 	}
 	return
 }
 
 // isLogConsistent is a helper function that checks if the log is consistent
 // with the leader's AppendEntries request at a given index and term.
-//
-// Assumes the lock is held when called.
-func (rf *Raft) isLogConsistent(prevLogIdx int64, prevLogTerm int64) bool {
-	lastLogIdx, _ := rf.lastLogIdxAndTerm()
+func (rl *raftLog) isLogConsistent(prevLogIdx int64, prevLogTerm int64) bool {
+	lastLogIdx, _ := rl.lastLogIdxAndTerm()
 	if prevLogIdx > lastLogIdx {
 		return false
 	}
-	return rf.getTerm(prevLogIdx) == prevLogTerm
+	return rl.getTerm(prevLogIdx) == prevLogTerm
 }
 
 // processEntries handles appending/truncating entries to the follower's log.
 // It returns a boolean indicating if truncation occurred, and a slice of the entries that were appended.
-//
-// Assumes the lock is held when called.
-func (rf *Raft) processEntries(req *raftpb.AppendEntriesRequest) (didTruncate bool, appendedEntries []*raftpb.LogEntry) {
+func (rl *raftLog) processEntries(req *raftpb.AppendEntriesRequest) (didTruncate bool, appendedEntries []*raftpb.LogEntry) {
 	for i, entry := range req.Entries {
 		absIdx := req.PrevLogIndex + 1 + int64(i)
-		lastAbsIdx, _ := rf.lastLogIdxAndTerm()
+		lastAbsIdx, _ := rl.lastLogIdxAndTerm()
 
 		if absIdx > lastAbsIdx {
 			appendedEntries = req.Entries[i:]
-			rf.log = append(rf.log, appendedEntries...)
+			rl.entries = append(rl.entries, appendedEntries...)
 			for _, e := range appendedEntries {
-				rf.logSizeInBytes += len(e.Cmd)
+				rl.logSizeInBytes += len(e.Cmd)
 			}
 			return false, appendedEntries
 		}
 
-		if rf.getTerm(absIdx) != entry.Term {
-			sliceIdx := absIdx - rf.lastIncludedIndex - 1
-			rf.log = rf.log[:sliceIdx]
+		if rl.getTerm(absIdx) != entry.Term {
+			sliceIdx := absIdx - rl.lastIncludedIndex - 1
+			rl.entries = rl.entries[:sliceIdx]
 			appendedEntries = req.Entries[i:]
-			rf.log = append(rf.log, appendedEntries...)
-			rf.logSizeInBytes = rf.calculateLogSizeInBytes() // Recalculate size after truncation
+			rl.entries = append(rl.entries, appendedEntries...)
+			rl.logSizeInBytes = rl.calculateLogSizeInBytes()
 			return true, appendedEntries
 		}
 	}
 	return false, nil
 }
 
-// fillConflictReply sets the conflict fields in an AppendEntries reply
-//
-// Assumes the lock is held when called
-func (rf *Raft) fillConflictReply(req *raftpb.AppendEntriesRequest, reply *raftpb.AppendEntriesResponse) {
-	lastLogIdx, _ := rf.lastLogIdxAndTerm()
+// fillConflictReply sets the conflict fields in an AppendEntries reply.
+func (rl *raftLog) fillConflictReply(req *raftpb.AppendEntriesRequest, reply *raftpb.AppendEntriesResponse) {
+	lastLogIdx, _ := rl.lastLogIdxAndTerm()
 	if req.PrevLogIndex > lastLogIdx {
 		reply.ConflictIndex = lastLogIdx + 1
 		reply.ConflictTerm = -1
 	} else {
-		reply.ConflictTerm = rf.getTerm(req.PrevLogIndex)
+		reply.ConflictTerm = rl.getTerm(req.PrevLogIndex)
 		firstIndexOfTerm := req.PrevLogIndex
-		for firstIndexOfTerm > rf.lastIncludedIndex+1 && rf.getTerm(firstIndexOfTerm-1) == reply.ConflictTerm {
+		for firstIndexOfTerm > rl.lastIncludedIndex+1 && rl.getTerm(firstIndexOfTerm-1) == reply.ConflictTerm {
 			firstIndexOfTerm--
 		}
 		reply.ConflictIndex = firstIndexOfTerm
 	}
 }
 
-// isCandidateLogUpToDate determines if the candidate's log is at least as up-to-date as receiver's log
-//
-// Assumes the lock is held when called
-func (rf *Raft) isCandidateLogUpToDate(candidateLastLogIdx int64, candidateLastLogTerm int64) bool {
-	myLastLogIdx, myLastLogTerm := rf.lastLogIdxAndTerm()
+// isCandidateLogUpToDate determines if the candidate's log is at least as up-to-date as receiver's log.
+func (rl *raftLog) isCandidateLogUpToDate(candidateLastLogIdx int64, candidateLastLogTerm int64) bool {
+	myLastLogIdx, myLastLogTerm := rl.lastLogIdxAndTerm()
 	if candidateLastLogTerm != myLastLogTerm {
 		return candidateLastLogTerm > myLastLogTerm
 	}
 	return candidateLastLogIdx >= myLastLogIdx
 }
 
-// initializeNextIndexes initializes indexes based on the current log state.
-//
-// If for some reason it used outside of Start function the mutex should be locked.
-func (rf *Raft) initializeNextIndexes() {
-	lastLogIdx, _ := rf.lastLogIdxAndTerm()
-	for i := range rf.nextIdx {
-		rf.nextIdx[i] = lastLogIdx + 1
-	}
+func (rl *raftLog) append(entry *raftpb.LogEntry) {
+	rl.entries = append(rl.entries, entry)
+	rl.logSizeInBytes += len(entry.Cmd)
 }
 
-// Assumes the lock is held when called, unless it is the raft.Start() function
-func (rf *Raft) calculateLogSizeInBytes() int {
+// compact truncates the log up to a given index, which is now covered by a snapshot.
+func (rl *raftLog) compact(index int64, term int64) {
+	if rl.getTerm(index) == term {
+		sliceIndex := index - rl.lastIncludedIndex
+		// The snapshot index must be within the bounds of the current log.
+		if sliceIndex >= 0 && sliceIndex <= int64(len(rl.entries)) {
+			rl.entries = append([]*raftpb.LogEntry(nil), rl.entries[sliceIndex:]...)
+		} else {
+			// If the index is outside the log.
+			rl.entries = nil
+		}
+	} else {
+		rl.entries = nil
+	}
+
+	rl.lastIncludedIndex = index
+	rl.lastIncludedTerm = term
+	rl.logSizeInBytes = rl.calculateLogSizeInBytes()
+}
+
+func (rl *raftLog) calculateLogSizeInBytes() int {
 	size := 0
-	for _, entry := range rf.log {
+	for _, entry := range rl.entries {
 		size += len(entry.Cmd)
 	}
 	return size

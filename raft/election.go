@@ -15,7 +15,7 @@ func (rf *Raft) startElection(electionDone chan struct{}) {
 	rf.curTerm++
 	rf.logger.Info("starting election", "term", rf.curTerm)
 	rf.votedFor = int64(rf.me)
-	lastLogIdx, lastLogTerm := rf.lastLogIdxAndTerm()
+	lastLogIdx, lastLogTerm := rf.log.lastLogIdxAndTerm()
 	electionTerm := rf.curTerm
 
 	rf.persistAndUnlock(nil)

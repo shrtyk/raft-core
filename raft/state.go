@@ -58,7 +58,7 @@ func (rf *Raft) becomeLeader() {
 	rf.resetHeartbeatTicker()
 
 	rf.leaderId = rf.me
-	lastLogIdx, _ := rf.lastLogIdxAndTerm()
+	lastLogIdx, _ := rf.log.lastLogIdxAndTerm()
 	for i := range rf.peersCount {
 		rf.nextIdx[i] = lastLogIdx + 1
 		rf.matchIdx[i] = 0

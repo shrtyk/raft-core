@@ -16,9 +16,9 @@ func (rf *Raft) getPersistentStateBytes() []byte {
 	b, err := proto.Marshal(&raftpb.RaftPersistentState{
 		CurrentTerm:       rf.curTerm,
 		VotedFor:          rf.votedFor,
-		Log:               rf.log,
-		LastIncludedIndex: rf.lastIncludedIndex,
-		LastIncludedTerm:  rf.lastIncludedTerm,
+		Log:               rf.log.entries,
+		LastIncludedIndex: rf.log.lastIncludedIndex,
+		LastIncludedTerm:  rf.log.lastIncludedTerm,
 	})
 	if err != nil {
 		rf.logger.Error("failed to marshal state", logger.ErrAttr(err))
@@ -64,12 +64,13 @@ func (rf *Raft) restoreState(data []byte) {
 
 	rf.curTerm = state.GetCurrentTerm()
 	rf.votedFor = state.GetVotedFor()
-	rf.log = state.GetLog()
-	rf.lastIncludedIndex = state.GetLastIncludedIndex()
-	rf.lastIncludedTerm = state.GetLastIncludedTerm()
+	rf.log.entries = state.GetLog()
+	rf.log.lastIncludedIndex = state.GetLastIncludedIndex()
+	rf.log.lastIncludedTerm = state.GetLastIncludedTerm()
+	rf.log.logSizeInBytes = rf.log.calculateLogSizeInBytes()
 
-	rf.commitIdx = rf.lastIncludedIndex
-	rf.lastAppliedIdx = rf.lastIncludedIndex
+	rf.commitIdx = rf.log.lastIncludedIndex
+	rf.lastAppliedIdx = rf.log.lastIncludedIndex
 }
 
 func (rf *Raft) PersistedStateSize() (int, error) {

@@ -28,8 +28,8 @@ func (rf *Raft) applier() {
 				var msg api.ApplyMessage
 				shouldSendToApplyChan := false
 
-				if rf.lastAppliedIdx < rf.lastIncludedIndex {
-					rf.logger.Debug("applying snapshot to state machine", "index", rf.lastIncludedIndex)
+				if rf.lastAppliedIdx < rf.log.lastIncludedIndex {
+					rf.logger.Debug("applying snapshot to state machine", "index", rf.log.lastIncludedIndex)
 
 					snapshot, err := rf.persister.ReadSnapshot()
 					if err != nil {
@@ -41,15 +41,15 @@ func (rf *Raft) applier() {
 					msg = api.ApplyMessage{
 						SnapshotValid: true,
 						Snapshot:      snapshot,
-						SnapshotTerm:  rf.lastIncludedTerm,
-						SnapshotIndex: rf.lastIncludedIndex,
+						SnapshotTerm:  rf.log.lastIncludedTerm,
+						SnapshotIndex: rf.log.lastIncludedIndex,
 					}
 					shouldSendToApplyChan = true
 				} else {
 					applyIdx := rf.lastAppliedIdx + 1
-					sliceIdx := applyIdx - rf.lastIncludedIndex - 1
+					sliceIdx := applyIdx - rf.log.lastIncludedIndex - 1
 
-					if rf.log[sliceIdx].Cmd == nil {
+					if rf.log.entries[sliceIdx].Cmd == nil {
 						rf.logger.Debug("skipping no-op entry", "index", applyIdx)
 						rf.lastAppliedIdx = applyIdx
 						rf.mu.RUnlock()
@@ -59,7 +59,7 @@ func (rf *Raft) applier() {
 					rf.logger.Debug("applying command to state machine", "index", applyIdx)
 					msg = api.ApplyMessage{
 						CommandValid: true,
-						Command:      rf.log[sliceIdx].Cmd,
+						Command:      rf.log.entries[sliceIdx].Cmd,
 						CommandIndex: applyIdx,
 					}
 					shouldSendToApplyChan = true

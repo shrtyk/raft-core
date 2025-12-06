@@ -113,7 +113,7 @@ func (h *statusHandler) getStatus() status {
 	h.rf.mu.RLock()
 	defer h.rf.mu.RUnlock()
 
-	lastLogIdx, lastLogTerm := h.rf.lastLogIdxAndTerm()
+	lastLogIdx, lastLogTerm := h.rf.log.lastLogIdxAndTerm()
 	s := status{
 		NodeID:      h.rf.me,
 		State:       stateToString(h.rf.state),
@@ -124,9 +124,9 @@ func (h *statusHandler) getStatus() status {
 	}
 	s.LogInfo.LastIndex = lastLogIdx
 	s.LogInfo.LastTerm = lastLogTerm
-	s.LogInfo.Count = len(h.rf.log)
-	s.SnapshotInfo.LastIncludedIndex = h.rf.lastIncludedIndex
-	s.SnapshotInfo.LastIncludedTerm = h.rf.lastIncludedTerm
+	s.LogInfo.Count = len(h.rf.log.entries)
+	s.SnapshotInfo.LastIncludedIndex = h.rf.log.lastIncludedIndex
+	s.SnapshotInfo.LastIncludedTerm = h.rf.log.lastIncludedTerm
 
 	if h.rf.isState(leader) {
 		s.LeaderSpecific = &leaderSpecificStatus{

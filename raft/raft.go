@@ -19,33 +19,35 @@ type Raft struct {
 	wg sync.WaitGroup // Global lock to protect node state.
 	mu sync.RWMutex   // Lock to protect shared access to this peer's state.
 
+	state      State // State of the peer.
 	peersCount int   // Amount of peers in cluster.
 	me         int   // This peer's index.
 	leaderId   int   // ID of the current leader.
 	dead       int32 // Set by Stop().
 
-	state     State           // State of the peer.
 	cfg       *api.RaftConfig // Config of the peer.
 	persister api.Persister   // Persistence layer abstraction (should be concurrent safe).
 	fsm       api.FSM         // Application finite state machine abstraction to be implemented by clients.
 	transport api.Transport   // RPC clients layer abstraction.
+	logger    *slog.Logger
 
-	electionTimer          *time.Timer
-	heartbeatTicker        *time.Ticker
+	electionTimer             *time.Timer
+	heartbeatTicker           *time.Ticker
+	lastHeartbeatMajorityTime time.Time
+
+	applyChan         chan *api.ApplyMessage
+	signalApplierChan chan struct{}
+	electionDone      chan struct{}
+
 	resetElectionTimerCh   chan struct{}
 	resetHeartbeatTickerCh chan struct{}
 
-	lastHeartbeatMajorityTime time.Time
-	applyChan                 chan *api.ApplyMessage
-	signalApplierChan         chan struct{}
-	electionDone              chan struct{}
+	log *raftLog
 
 	// Persistent state:
 
-	curTerm        int64              // Latest term server has seen.
-	votedFor       int64              // Index of peer in peers.
-	log            []*raftpb.LogEntry // Log entries.
-	logSizeInBytes int
+	curTerm  int64 // Latest term server has seen.
+	votedFor int64 // Index of peer in peers.
 
 	// Volatile state on all servers:
 
@@ -61,17 +63,23 @@ type Raft struct {
 	// to be replicated on server (initialized to 0, increases monotonically).
 	matchIdx []int64
 
-	lastIncludedIndex int64 // Index of the last entry in the log that the snapshot replaces.
-	lastIncludedTerm  int64 // Term of the last entry in the log that the snapshot replaces.
-
 	raftCtx    context.Context
 	raftCancel func()
-	logger     *slog.Logger
 
 	monitoringServer MonitoringServer
 	grpcServer       GRPCServer
 
 	raftpb.UnimplementedRaftServiceServer
+}
+
+// initializeNextIndexes initializes indexes based on the current log state.
+//
+// If for some reason it used outside of Start function the mutex should be locked.
+func (rf *Raft) initializeNextIndexes() {
+	lastLogIdx, _ := rf.log.lastLogIdxAndTerm()
+	for i := range rf.nextIdx {
+		rf.nextIdx[i] = lastLogIdx + 1
+	}
 }
 
 func (rf *Raft) Start() error {
@@ -80,7 +88,6 @@ func (rf *Raft) Start() error {
 		return fmt.Errorf("failed to read peer #%d state: %w", rf.me, err)
 	}
 	rf.restoreState(state)
-	rf.logSizeInBytes = rf.calculateLogSizeInBytes()
 	rf.initializeNextIndexes()
 	rf.electionTimer = time.NewTimer(rf.randElectionInterval())
 	rf.heartbeatTicker = time.NewTicker(rf.cfg.Timings.HeartbeatTimeout)
@@ -165,9 +172,8 @@ func (rf *Raft) Submit(command []byte) *api.SubmitResult {
 		Term: rf.curTerm,
 		Cmd:  command,
 	}
-	rf.log = append(rf.log, newEntry)
-	rf.logSizeInBytes += len(command)
-	lastLogIdx, _ := rf.lastLogIdxAndTerm()
+	rf.log.append(newEntry)
+	lastLogIdx, _ := rf.log.lastLogIdxAndTerm()
 	rf.matchIdx[rf.me] = lastLogIdx
 	rf.nextIdx[rf.me] = lastLogIdx + 1
 

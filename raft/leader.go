@@ -34,7 +34,7 @@ func (rf *Raft) ConfirmLeadership(ctx context.Context) bool {
 				Term:              curTerm,
 				LeaderId:          int64(rf.me),
 				PrevLogIndex:      rf.nextIdx[peerIdx] - 1,
-				PrevLogTerm:       rf.getTerm(rf.nextIdx[peerIdx] - 1),
+				PrevLogTerm:       rf.log.getTerm(rf.nextIdx[peerIdx] - 1),
 				LeaderCommitIndex: rf.commitIdx,
 				Entries:           nil,
 			}
@@ -109,7 +109,7 @@ func (rf *Raft) sendSnapshotOrEntries() {
 			}
 
 			var err error
-			if rf.nextIdx[peerIdx] <= rf.lastIncludedIndex {
+			if rf.nextIdx[peerIdx] <= rf.log.lastIncludedIndex {
 				err = rf.leaderSendSnapshot(peerIdx)
 			} else {
 				err = rf.leaderSendEntries(peerIdx)
@@ -127,11 +127,11 @@ func (rf *Raft) sendSnapshotOrEntries() {
 // Assumes the lock is held when called
 func (rf *Raft) leaderSendEntries(peerIdx int) error {
 	prevLogIdx := rf.nextIdx[peerIdx] - 1
-	prevLogTerm := rf.getTerm(prevLogIdx)
+	prevLogTerm := rf.log.getTerm(prevLogIdx)
 
-	sliceIndex := rf.nextIdx[peerIdx] - rf.lastIncludedIndex - 1
-	entries := make([]*raftpb.LogEntry, len(rf.log[sliceIndex:]))
-	copy(entries, rf.log[sliceIndex:])
+	sliceIndex := rf.nextIdx[peerIdx] - rf.log.lastIncludedIndex - 1
+	entries := make([]*raftpb.LogEntry, len(rf.log.entries[sliceIndex:]))
+	copy(entries, rf.log.entries[sliceIndex:])
 
 	args := &raftpb.AppendEntriesRequest{
 		Term:              rf.curTerm,
@@ -198,9 +198,9 @@ func (rf *Raft) updateNextIndexAfterConflict(peerIdx int, reply *raftpb.AppendEn
 		return
 	}
 
-	lastLogIdx, _ := rf.lastLogIdxAndTerm()
-	for i := lastLogIdx; i > rf.lastIncludedIndex; i-- {
-		if rf.getTerm(i) == reply.ConflictTerm {
+	lastLogIdx, _ := rf.log.lastLogIdxAndTerm()
+	for i := lastLogIdx; i > rf.log.lastIncludedIndex; i-- {
+		if rf.log.getTerm(i) == reply.ConflictTerm {
 			rf.nextIdx[peerIdx] = i + 1
 			return
 		}
@@ -220,7 +220,7 @@ func (rf *Raft) tryToCommit() {
 	majorityIdx := rf.peersCount / 2
 	newCommitIdx := matchIdxCopy[majorityIdx]
 
-	if newCommitIdx > rf.commitIdx && rf.getTerm(newCommitIdx) == rf.curTerm {
+	if newCommitIdx > rf.commitIdx && rf.log.getTerm(newCommitIdx) == rf.curTerm {
 		rf.logger.Debug(
 			"advancing commit index",
 			"old_commit_idx", rf.commitIdx,
@@ -243,8 +243,8 @@ func (rf *Raft) leaderSendSnapshot(peerIdx int) error {
 	req := &raftpb.InstallSnapshotRequest{
 		Term:              rf.curTerm,
 		LeaderId:          int64(rf.me),
-		LastIncludedIndex: rf.lastIncludedIndex,
-		LastIncludedTerm:  rf.lastIncludedTerm,
+		LastIncludedIndex: rf.log.lastIncludedIndex,
+		LastIncludedTerm:  rf.log.lastIncludedTerm,
 		Data:              snapshot,
 	}
 	rf.mu.RUnlock()

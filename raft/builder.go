@@ -77,7 +77,7 @@ func (nb *nodeBuilder) Build() (api.Raft, error) {
 		cfg:               nb.cfg,
 		logger:            log,
 		signalApplierChan: make(chan struct{}, 1),
-		log:               make([]*raftpb.LogEntry, 0),
+		log:               newLog(0, 0, make([]*raftpb.LogEntry, 0)),
 		nextIdx:           make([]int64, nb.transport.PeersCount()),
 		matchIdx:          make([]int64, nb.transport.PeersCount()),
 
