@@ -150,46 +150,30 @@ func (rf *Raft) AppendEntries(ctx context.Context, req *raftpb.AppendEntriesRequ
 
 func (rf *Raft) InstallSnapshot(ctx context.Context, req *raftpb.InstallSnapshotRequest) (reply *raftpb.InstallSnapshotResponse, err error) {
 	reply = &raftpb.InstallSnapshotResponse{}
-	var needToPersist, shouldSignalApplier bool
-	var snapshotData []byte
-
 	rf.mu.Lock()
-	defer func() {
-		if pErr := rf.unlockConditionally(needToPersist, snapshotData); pErr != nil {
-			rf.handlePersistenceError("InstallSnapshot", pErr)
-			return
-		}
-		if shouldSignalApplier {
-			rf.signalApplier()
-		}
-	}()
 
 	reply.Term = rf.curTerm
 	if req.Term < rf.curTerm {
+		rf.mu.Unlock()
 		return
 	}
 
-	rf.leaderId = int(req.LeaderId)
 	if req.Term > rf.curTerm {
 		rf.becomeFollower(req.Term)
-		needToPersist = true
 	}
-
+	rf.leaderId = int(req.LeaderId)
 	rf.resetElectionTimer()
+
+	if req.LastIncludedIndex <= rf.lastIncludedIndex {
+		rf.mu.Unlock()
+		return
+	}
 
 	rf.logger.Info(
 		"installing snapshot",
 		"leader_id", req.LeaderId,
 		"last_included_index", req.LastIncludedIndex,
 	)
-
-	if req.LastIncludedIndex <= rf.lastIncludedIndex {
-		return
-	}
-
-	needToPersist = true
-	snapshotData = req.Data
-	shouldSignalApplier = true
 
 	sliceIndex := req.LastIncludedIndex - rf.lastIncludedIndex
 	if sliceIndex < int64(len(rf.log)) && rf.getTerm(req.LastIncludedIndex) == req.LastIncludedTerm {
@@ -200,10 +184,14 @@ func (rf *Raft) InstallSnapshot(ctx context.Context, req *raftpb.InstallSnapshot
 
 	rf.lastIncludedIndex = req.LastIncludedIndex
 	rf.lastIncludedTerm = req.LastIncludedTerm
+	rf.commitIdx = max(rf.commitIdx, rf.lastIncludedIndex)
 
-	if rf.commitIdx < req.LastIncludedIndex {
-		rf.commitIdx = req.LastIncludedIndex
+	if pErr := rf.persistAndUnlock(req.Data); pErr != nil {
+		rf.handlePersistenceError("InstallSnapshot", pErr)
+		return
 	}
+
+	rf.signalApplier()
 
 	return
 }

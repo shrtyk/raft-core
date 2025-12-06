@@ -49,20 +49,6 @@ func (rf *Raft) persistMetadataAndUnlock() error {
 	return rf.persister.SetMetadata(term, votedFor)
 }
 
-// unlockConditionally unlocks the main mutex, and persists the state if needed
-//
-// It must be called with rf.mu held, and it will unlock it
-func (rf *Raft) unlockConditionally(needToPersist bool, snapshot []byte) error {
-	if needToPersist {
-		if err := rf.persistAndUnlock(snapshot); err != nil {
-			return err
-		}
-	} else {
-		rf.mu.Unlock()
-	}
-	return nil
-}
-
 // restoreState restores previously persisted state from data
 func (rf *Raft) restoreState(data []byte) {
 	if len(data) < 1 { // bootstrap without any state?
