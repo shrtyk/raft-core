@@ -80,6 +80,9 @@ func (nb *nodeBuilder) Build() (api.Raft, error) {
 		log:               make([]*raftpb.LogEntry, 0),
 		nextIdx:           make([]int64, nb.transport.PeersCount()),
 		matchIdx:          make([]int64, nb.transport.PeersCount()),
+
+		resetElectionTimerCh:   make(chan struct{}, 1),
+		resetHeartbeatTickerCh: make(chan struct{}, 1),
 	}
 
 	if nb.cfg.GRPCAddr != "" {

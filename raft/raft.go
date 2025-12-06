@@ -24,22 +24,21 @@ type Raft struct {
 	leaderId   int   // ID of the current leader.
 	dead       int32 // Set by Stop().
 
-	state State           // State of the peer.
-	cfg   *api.RaftConfig // Config of the peer.
+	state     State           // State of the peer.
+	cfg       *api.RaftConfig // Config of the peer.
+	persister api.Persister   // Persistence layer abstraction (should be concurrent safe).
+	fsm       api.FSM         // Application finite state machine abstraction to be implemented by clients.
+	transport api.Transport   // RPC clients layer abstraction.
 
-	pmu       sync.RWMutex  // Lock for persistence writes to provide atomicity of operations without holding global lock.
-	persister api.Persister // Persistence layer abstraction (should be concurrent safe).
-	fsm       api.FSM       // Application finite state machine abstraction to be implemented by clients.
-	transport api.Transport // RPC clients layer abstraction.
+	electionTimer          *time.Timer
+	heartbeatTicker        *time.Ticker
+	resetElectionTimerCh   chan struct{}
+	resetHeartbeatTickerCh chan struct{}
 
-	timerMu                   sync.Mutex // Lock to provide atomic timers updates.
-	electionTimer             *time.Timer
-	heartbeatTicker           *time.Ticker
 	lastHeartbeatMajorityTime time.Time
-
-	applyChan         chan *api.ApplyMessage
-	signalApplierChan chan struct{}
-	electionDone      chan struct{}
+	applyChan                 chan *api.ApplyMessage
+	signalApplierChan         chan struct{}
+	electionDone              chan struct{}
 
 	// Persistent state:
 

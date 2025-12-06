@@ -17,6 +17,26 @@ func (rf *Raft) ticker() {
 		select {
 		case <-rf.raftCtx.Done():
 			return
+
+		case <-rf.resetElectionTimerCh:
+			rf.heartbeatTicker.Stop()
+			if !rf.electionTimer.Stop() {
+				select {
+				case <-rf.electionTimer.C:
+				default:
+				}
+			}
+			rf.electionTimer.Reset(rf.randElectionInterval())
+
+		case <-rf.resetHeartbeatTickerCh:
+			if !rf.electionTimer.Stop() {
+				select {
+				case <-rf.electionTimer.C:
+				default:
+				}
+			}
+			rf.heartbeatTicker.Reset(rf.cfg.Timings.HeartbeatTimeout)
+
 		case <-rf.electionTimer.C:
 			rf.logger.Debug("election timer fired, attempting to start election")
 			rf.mu.Lock()
@@ -41,31 +61,20 @@ func (rf *Raft) ticker() {
 	}
 }
 
-// activateLeaderTimers stops election timer and starts heartbeat ticker
+// resetHeartbeatTicker sends a signal to the ticker to reset the heartbeat timer.
 func (rf *Raft) resetHeartbeatTicker() {
-	rf.timerMu.Lock()
-	defer rf.timerMu.Unlock()
-	if !rf.electionTimer.Stop() {
-		select {
-		case <-rf.electionTimer.C:
-		default:
-		}
+	select {
+	case rf.resetHeartbeatTickerCh <- struct{}{}:
+	default:
 	}
-	rf.heartbeatTicker.Reset(rf.cfg.Timings.HeartbeatTimeout)
 }
 
-// resetElectionTimer stops heartbeat ticker and resets election timer
+// resetElectionTimer sends a signal to the ticker to reset the election timer.
 func (rf *Raft) resetElectionTimer() {
-	rf.timerMu.Lock()
-	defer rf.timerMu.Unlock()
-	rf.heartbeatTicker.Stop()
-	if !rf.electionTimer.Stop() {
-		select {
-		case <-rf.electionTimer.C:
-		default:
-		}
+	select {
+	case rf.resetElectionTimerCh <- struct{}{}:
+	default:
 	}
-	rf.electionTimer.Reset(rf.randElectionInterval())
 }
 
 func (rf *Raft) randElectionInterval() time.Duration {
