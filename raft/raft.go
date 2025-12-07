@@ -34,6 +34,7 @@ type Raft struct {
 
 	electionTimer             *time.Timer
 	heartbeatTicker           *time.Ticker
+	lastReplicationTime       time.Time
 	lastHeartbeatMajorityTime time.Time
 
 	applyChan         chan *api.ApplyMessage
@@ -201,7 +202,6 @@ func (rf *Raft) Submit(command []byte) *api.SubmitResult {
 	res.LogIndex = lastLogIdx
 	res.IsLeader = true
 
-	rf.heartbeatTicker.Reset(rf.cfg.Timings.HeartbeatTimeout)
 	go rf.sendSnapshotOrEntries()
 
 	return res

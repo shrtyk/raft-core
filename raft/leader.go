@@ -88,9 +88,19 @@ func (rf *Raft) ConfirmLeadership(ctx context.Context) bool {
 
 // sendSnapshotOrEntries is invoked by the leader to replicate its state to all peers
 func (rf *Raft) sendSnapshotOrEntries() {
-	rf.mu.RLock()
+	rf.mu.Lock()
+	if time.Since(rf.lastReplicationTime) < 10*time.Millisecond {
+		rf.mu.Unlock()
+		return
+	}
+	rf.lastReplicationTime = time.Now()
 	curTerm := rf.curTerm
-	rf.mu.RUnlock()
+	isLeader := rf.isState(leader)
+	rf.mu.Unlock()
+
+	if !isLeader {
+		return
+	}
 
 	for i := range rf.peersCount {
 		if i == rf.me {
@@ -102,21 +112,22 @@ func (rf *Raft) sendSnapshotOrEntries() {
 				rf.mu.RUnlock()
 				return
 			}
+
 			if !rf.transport.IsPeerAvailable(peerIdx) {
-				rf.logger.Debug("peer not available, circuit open", slog.Int("peer_id", peerIdx))
 				rf.mu.RUnlock()
 				return
 			}
 
+			needSnapshot := rf.nextIdx[peerIdx] <= rf.log.lastIncludedIndex
 			var err error
-			if rf.nextIdx[peerIdx] <= rf.log.lastIncludedIndex {
+			if needSnapshot {
 				err = rf.leaderSendSnapshot(peerIdx)
 			} else {
 				err = rf.leaderSendEntries(peerIdx)
 			}
 
 			if err != nil {
-				rf.logger.Debug("failed to send gRPC call", slog.Int("peer_id", peerIdx), logger.ErrAttr(err))
+				rf.logger.Debug("failed to replication", slog.Int("peer_id", peerIdx), logger.ErrAttr(err))
 			}
 		}(i)
 	}

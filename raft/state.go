@@ -3,6 +3,7 @@ package raft
 import (
 	"fmt"
 	"sync/atomic"
+	"time"
 
 	"github.com/shrtyk/raft-core/api"
 )
@@ -64,7 +65,7 @@ func (rf *Raft) becomeLeader() {
 		rf.matchIdx[i] = 0
 	}
 	rf.matchIdx[rf.me] = lastLogIdx
-
+	rf.lastReplicationTime = time.Now()
 	if rf.cfg.CommitNoOpOn {
 		go rf.Submit(nil)
 	}
