@@ -118,19 +118,7 @@ func (rf *Raft) AppendEntries(ctx context.Context, req *raftpb.AppendEntriesRequ
 		shouldSignalApplier = true
 	}
 
-	var persistOp func() error
-	switch {
-	case didTruncate || termChanged:
-		stateCopy := rf.getPersistentStateBytes()
-		persistOp = func() error { return rf.persister.SaveStateAndSnapshot(stateCopy, nil) }
-	case len(appendedEntries) > 0:
-		entriesCopy := make([]*raftpb.LogEntry, len(appendedEntries))
-		for i, e := range appendedEntries {
-			entriesCopy[i] = proto.Clone(e).(*raftpb.LogEntry)
-		}
-		persistOp = func() error { return rf.persister.AppendEntries(entriesCopy) }
-	}
-
+	persistOp := rf.getAppendEntriesPersistOp(termChanged, didTruncate, appendedEntries)
 	rf.mu.Unlock()
 
 	if persistOp != nil {
@@ -146,6 +134,28 @@ func (rf *Raft) AppendEntries(ctx context.Context, req *raftpb.AppendEntriesRequ
 
 	reply.Success = true
 	return
+}
+
+// getAppendEntriesPersistOp returns an appropriate persistence operation based on the outcome of an AppendEntries call.
+func (rf *Raft) getAppendEntriesPersistOp(termChanged, didTruncate bool, appendedEntries []*raftpb.LogEntry) func() error {
+	if !didTruncate && !termChanged && len(appendedEntries) == 0 {
+		return nil
+	}
+
+	if didTruncate || termChanged {
+		stateCopy := rf.getPersistentStateBytes()
+		return func() error { return rf.persister.SaveStateAndSnapshot(stateCopy, nil) }
+	}
+
+	if len(appendedEntries) > 0 {
+		entriesCopy := make([]*raftpb.LogEntry, len(appendedEntries))
+		for i, e := range appendedEntries {
+			entriesCopy[i] = proto.Clone(e).(*raftpb.LogEntry)
+		}
+		return func() error { return rf.persister.AppendEntries(entriesCopy) }
+	}
+
+	return nil
 }
 
 func (rf *Raft) InstallSnapshot(ctx context.Context, req *raftpb.InstallSnapshotRequest) (reply *raftpb.InstallSnapshotResponse, err error) {
