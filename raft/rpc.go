@@ -3,11 +3,15 @@ package raft
 import (
 	"context"
 
+	"github.com/shrtyk/raft-core/api"
 	raftpb "github.com/shrtyk/raft-core/internal/proto/gen"
 	"google.golang.org/protobuf/proto"
 )
 
 func (rf *Raft) RequestVote(ctx context.Context, req *raftpb.RequestVoteRequest) (reply *raftpb.RequestVoteResponse, err error) {
+	if rf.Killed() {
+		return nil, api.ErrNodeIsDead
+	}
 	reply = &raftpb.RequestVoteResponse{}
 	var persistMetadata bool
 
@@ -72,6 +76,9 @@ func (rf *Raft) RequestVote(ctx context.Context, req *raftpb.RequestVoteRequest)
 }
 
 func (rf *Raft) AppendEntries(ctx context.Context, req *raftpb.AppendEntriesRequest) (reply *raftpb.AppendEntriesResponse, err error) {
+	if rf.Killed() {
+		return nil, api.ErrNodeIsDead
+	}
 	reply = &raftpb.AppendEntriesResponse{}
 	rf.mu.Lock()
 
@@ -159,6 +166,9 @@ func (rf *Raft) getAppendEntriesPersistOp(termChanged, didTruncate bool, appende
 }
 
 func (rf *Raft) InstallSnapshot(ctx context.Context, req *raftpb.InstallSnapshotRequest) (reply *raftpb.InstallSnapshotResponse, err error) {
+	if rf.Killed() {
+		return nil, api.ErrNodeIsDead
+	}
 	reply = &raftpb.InstallSnapshotResponse{}
 	rf.mu.Lock()
 

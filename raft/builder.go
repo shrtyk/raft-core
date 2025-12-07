@@ -83,6 +83,7 @@ func (nb *nodeBuilder) Build() (api.Raft, error) {
 
 		resetElectionTimerCh:   make(chan struct{}, 1),
 		resetHeartbeatTickerCh: make(chan struct{}, 1),
+		errChan:                make(chan error, 1),
 	}
 
 	if nb.cfg.GRPCAddr != "" {

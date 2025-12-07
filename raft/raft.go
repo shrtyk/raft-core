@@ -16,8 +16,9 @@ import (
 
 // An implementation of a single Raft peer.
 type Raft struct {
-	wg sync.WaitGroup // Global lock to protect node state.
-	mu sync.RWMutex   // Lock to protect shared access to this peer's state.
+	wg      sync.WaitGroup // Global lock to protect node state.
+	mu      sync.RWMutex   // Lock to protect shared access to this peer's state.
+	errOnce sync.Once      // Used in case of persistence errors and guarantees at most one fatal error to be sent to client
 
 	state      State // State of the peer.
 	peersCount int   // Amount of peers in cluster.
@@ -41,16 +42,15 @@ type Raft struct {
 
 	resetElectionTimerCh   chan struct{}
 	resetHeartbeatTickerCh chan struct{}
+	errChan                chan error
 
 	log *raftLog
 
 	// Persistent state:
-
 	curTerm  int64 // Latest term server has seen.
 	votedFor int64 // Index of peer in peers.
 
 	// Volatile state on all servers:
-
 	commitIdx      int64 // Index of highest log entry known to be committed.
 	lastAppliedIdx int64 // Index of the highest log entry applied to state machine.
 
@@ -70,6 +70,10 @@ type Raft struct {
 	grpcServer       GRPCServer
 
 	raftpb.UnimplementedRaftServiceServer
+}
+
+func (rf *Raft) Errors() <-chan error {
+	return rf.errChan
 }
 
 // initializeNextIndexes initializes indexes based on the current log state.

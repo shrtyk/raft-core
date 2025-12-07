@@ -30,6 +30,7 @@ import (
 )
 
 var (
+	ErrNodeIsDead   = errors.New("raft: node is shut down")
 	ErrOutdatedTerm = errors.New("raft: term has been updated.")
 	ErrHigherTerm   = errors.New("raft: recieved higher term in reply.")
 	ErrOldSnapshot  = errors.New("raft: snapshot index is not newer than the last included index.")
@@ -76,6 +77,13 @@ type Raft interface {
 	// Killed returns true if peers has been stoped.
 	// Typically used by tests.
 	Killed() bool
+
+	// Errors returns a channel that will receive at most one error object if the
+	// node encounters a fatal, unrecoverable error. The channel will be closed
+	// after the error is sent.
+	//
+	// It is the client's responsibility to monitor this channel.
+	Errors() <-chan error
 }
 
 // SubmitResult holds the result of a successful command submission.

@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -77,17 +78,25 @@ func (rf *Raft) PersistedStateSize() (int, error) {
 	return rf.persister.RaftStateSize()
 }
 
-// handlePersistenceError logs error and immediately panics
+// handlePersistenceError logs a critical error, sends it to the client on the
+// error channel, and gracefully shuts down the Raft node.
 func (rf *Raft) handlePersistenceError(rpcName string, err error) {
-	errMsg := fmt.Sprintf(
-		"CRITICAL: failed to persist state in '%s'. The node's state is now corrupted! Shutting down to prevent further inconsistency. Error: %v",
-		rpcName,
-		err,
-	)
-	rf.logger.Error(
-		errMsg,
-		slog.String("rpc", rpcName),
-		logger.ErrAttr(err),
-	)
-	panic(errMsg)
+	rf.errOnce.Do(func() {
+		fullErr := fmt.Errorf(
+			"CRITICAL: failed to persist state in '%s'. The node's state is now corrupted! Shutting down to prevent further inconsistency. Error: %w",
+			rpcName,
+			err,
+		)
+		rf.logger.Error(
+			fullErr.Error(),
+			slog.String("rpc", rpcName),
+			logger.ErrAttr(err),
+		)
+
+		serr := rf.Stop()
+		fullErr = errors.Join(fullErr, fmt.Errorf("error occurred during gracefull shutdown: %w", serr))
+
+		rf.errChan <- fullErr
+		close(rf.errChan)
+	})
 }
