@@ -201,9 +201,6 @@ func (rf *Raft) Submit(command []byte) *api.SubmitResult {
 	res.LogIndex = lastLogIdx
 	res.IsLeader = true
 
-	rf.heartbeatTicker.Reset(rf.cfg.Timings.HeartbeatTimeout)
-	go rf.sendSnapshotOrEntries()
-
 	return res
 }
 

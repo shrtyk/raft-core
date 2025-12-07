@@ -42,11 +42,6 @@ var (
 type Raft interface {
 	// Propose submits a new command to the Raft cluster for replication.
 	//
-	// Returns:
-	//   - index: the log index assigned to this command (if accepted)
-	//   - term:  the current term at the time of submission
-	//   - isLeader: true if this peer believes it is the current leader
-	//
 	// If isLeader is false, the command was not accepted and should be redirected
 	// to leader.
 	//
