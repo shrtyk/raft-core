@@ -11,9 +11,9 @@ import (
 	"github.com/shrtyk/raft-core/pkg/logger"
 )
 
-// sendHeartbeats sends heartbeats to all peers to confirm leadership and returns
+// confirmLeadership sends heartbeats to all peers to confirm leadership and returns
 // true if a majority acknowledges the leader in the current term.
-func (rf *Raft) ConfirmLeadership(ctx context.Context) bool {
+func (rf *Raft) confirmLeadership(ctx context.Context) bool {
 	rf.mu.RLock()
 	curTerm := rf.curTerm
 	if !rf.isState(leader) {
@@ -29,7 +29,6 @@ func (rf *Raft) ConfirmLeadership(ctx context.Context) bool {
 		}
 		go func(peerIdx int) {
 			rf.mu.RLock()
-			// A heartbeat is an AppendEntries RPC with no log entries.
 			req := &raftpb.AppendEntriesRequest{
 				Term:              curTerm,
 				LeaderId:          int64(rf.me),
@@ -51,7 +50,7 @@ func (rf *Raft) ConfirmLeadership(ctx context.Context) bool {
 			}
 
 			rf.mu.Lock()
-			// If a peer has a higher term, we are no longer the leader.
+
 			if reply.Term > rf.curTerm {
 				rf.becomeFollower(reply.Term)
 				if pErr := rf.persistAndUnlock(nil); pErr != nil {
@@ -65,12 +64,12 @@ func (rf *Raft) ConfirmLeadership(ctx context.Context) bool {
 		}(i)
 	}
 
-	confirmedAcks := 1 // Start with 1 for the leader itself.
+	confirmedAcks := 1
 	majority := rf.peersCount/2 + 1
 	for range rf.peersCount - 1 {
 		select {
 		case <-ctx.Done():
-			return false // Timeout.
+			return false
 		case ack := <-acks:
 			if ack {
 				confirmedAcks++
@@ -113,11 +112,6 @@ func (rf *Raft) sendSnapshotOrEntries() {
 				return
 			}
 
-			if !rf.transport.IsPeerAvailable(peerIdx) {
-				rf.mu.RUnlock()
-				return
-			}
-
 			needSnapshot := rf.nextIdx[peerIdx] <= rf.log.lastIncludedIndex
 			var err error
 			if needSnapshot {
@@ -127,7 +121,7 @@ func (rf *Raft) sendSnapshotOrEntries() {
 			}
 
 			if err != nil {
-				rf.logger.Debug("failed to replication", slog.Int("peer_id", peerIdx), logger.ErrAttr(err))
+				rf.logger.Debug("replication failed", slog.Int("peer_id", peerIdx), logger.ErrAttr(err))
 			}
 		}(i)
 	}

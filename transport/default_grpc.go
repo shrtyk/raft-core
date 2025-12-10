@@ -11,25 +11,19 @@ import (
 
 var _ api.Transport = (*GRPCTransport)(nil)
 
-type client struct {
-	raftClient raftpb.RaftServiceClient
-}
-
 type GRPCTransport struct {
 	requestTimeout time.Duration
-	clients        []*client
+	clients        []raftpb.RaftServiceClient
 }
 
 func NewGRPCTransport(cfg *api.RaftConfig, conns []*grpc.ClientConn) (*GRPCTransport, error) {
 	tr := &GRPCTransport{
 		requestTimeout: cfg.Timings.RPCTimeout,
-		clients:        make([]*client, len(conns)),
+		clients:        make([]raftpb.RaftServiceClient, len(conns)),
 	}
 
 	for i, conn := range conns {
-		tr.clients[i] = &client{
-			raftClient: raftpb.NewRaftServiceClient(conn),
-		}
+		tr.clients[i] = raftpb.NewRaftServiceClient(conn)
 	}
 
 	return tr, nil
@@ -42,7 +36,7 @@ func (t *GRPCTransport) SendRequestVote(
 	tctx, tcancel := context.WithTimeout(ctx, t.requestTimeout)
 	defer tcancel()
 
-	return t.clients[to].raftClient.RequestVote(tctx, req)
+	return t.clients[to].RequestVote(tctx, req)
 }
 
 func (t *GRPCTransport) SendAppendEntries(
@@ -51,7 +45,7 @@ func (t *GRPCTransport) SendAppendEntries(
 	req *raftpb.AppendEntriesRequest) (*raftpb.AppendEntriesResponse, error) {
 	tctx, tcancel := context.WithTimeout(ctx, t.requestTimeout)
 	defer tcancel()
-	return t.clients[to].raftClient.AppendEntries(tctx, req)
+	return t.clients[to].AppendEntries(tctx, req)
 }
 
 func (t *GRPCTransport) SendInstallSnapshot(
@@ -60,13 +54,9 @@ func (t *GRPCTransport) SendInstallSnapshot(
 	req *raftpb.InstallSnapshotRequest) (*raftpb.InstallSnapshotResponse, error) {
 	tctx, tcancel := context.WithTimeout(ctx, t.requestTimeout)
 	defer tcancel()
-	return t.clients[to].raftClient.InstallSnapshot(tctx, req)
+	return t.clients[to].InstallSnapshot(tctx, req)
 }
 
 func (t *GRPCTransport) PeersCount() int {
 	return len(t.clients)
-}
-
-func (t *GRPCTransport) IsPeerAvailable(peerID int) bool {
-	return true
 }

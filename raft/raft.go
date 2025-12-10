@@ -227,7 +227,7 @@ func (rf *Raft) ReadOnly(ctx context.Context, key []byte) (*api.ReadOnlyResult, 
 		tctx, tcancel := context.WithTimeout(ctx, rf.cfg.Timings.RPCTimeout)
 		defer tcancel()
 
-		if !rf.ConfirmLeadership(tctx) {
+		if !rf.confirmLeadership(tctx) {
 			rf.logger.Warn("failed to confirm leadership, aborting read-only request")
 			rf.mu.RLock()
 			leaderId = rf.leaderId
